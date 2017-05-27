@@ -10,12 +10,13 @@
 #define STCPCLIENT_H
 #include <pthread.h>
 #include "../common/seg.h"
+#include "../common/constants.h"
 
 //FSM中使用的客户端状态
-#define	CLOSED 1
-#define	SYNSENT 2
-#define	CONNECTED 3
-#define	FINWAIT 4
+#define	CLOSED		1
+#define	SYNSENT		2
+#define	CONNECTED	3
+#define	FINWAIT		4
 
 //在发送缓冲区链表中存储段的单元.
 typedef struct segBuf {
@@ -38,6 +39,17 @@ typedef struct client_tcb {
 	segBuf_t* sendBufTail;          //发送缓冲区尾
 	unsigned int unAck_segNum;      //已发送但未收到确认段的数量
 } client_tcb_t;
+
+typedef struct {
+	int used;
+	client_tcb_t tcb;
+} tcb_list_item;
+
+extern tcb_list_item tcb_list[MAX_TRANSPORT_CONNECTIONS];
+
+extern int sip_sockfd;
+
+void make_seg(seg_t *pseg, tcb_list_item *ptcb, unsigned short type, char *data, unsigned len);
 
 //
 //  用于客户端应用程序的STCP套接字API. 

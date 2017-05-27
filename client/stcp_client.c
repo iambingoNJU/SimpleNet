@@ -1,105 +1,454 @@
-//ÎÄ¼şÃû: client/stcp_client.c
-//
-//ÃèÊö: Õâ¸öÎÄ¼ş°üº¬STCP¿Í»§¶Ë½Ó¿ÚÊµÏÖ 
-//
-//´´½¨ÈÕÆÚ: 2015Äê
 
-#include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
-#include <sys/socket.h>
-#include <sys/select.h>
-#include <assert.h>
-#include <strings.h>
 #include <unistd.h>
-#include <sys/time.h>
-#include <time.h>
+#include <string.h>
+#include <stdlib.h>
+#include <assert.h>
 #include <pthread.h>
-#include "../topology/topology.h"
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <time.h>
+#include <sys/time.h>
+
+#include "../common/debug.h"
 #include "stcp_client.h"
-#include "../common/seg.h"
 
-//ÉùÃ÷tcbtableÎªÈ«¾Ö±äÁ¿
-client_tcb_t* tcbtable[MAX_TRANSPORT_CONNECTIONS];
-//ÉùÃ÷µ½SIP½ø³ÌµÄTCPÁ¬½ÓÎªÈ«¾Ö±äÁ¿
-int sip_conn;
+/*é¢å‘åº”ç”¨å±‚çš„æ¥å£*/
 
-/*********************************************************************/
 //
-//STCP APIÊµÏÖ
+//  æˆ‘ä»¬åœ¨ä¸‹é¢æä¾›äº†æ¯ä¸ªå‡½æ•°è°ƒç”¨çš„åŸå‹å®šä¹‰å’Œç»†èŠ‚è¯´æ˜, ä½†è¿™äº›åªæ˜¯æŒ‡å¯¼æ€§çš„, ä½ å®Œå…¨å¯ä»¥æ ¹æ®è‡ªå·±çš„æƒ³æ³•æ¥è®¾è®¡ä»£ç .
 //
-/*********************************************************************/
+//  æ³¨æ„: å½“å®ç°è¿™äº›å‡½æ•°æ—¶, ä½ éœ€è¦è€ƒè™‘FSMä¸­æ‰€æœ‰å¯èƒ½çš„çŠ¶æ€, è¿™å¯ä»¥ä½¿ç”¨switchè¯­å¥æ¥å®ç°.
+//
+//  ç›®æ ‡: ä½ çš„ä»»åŠ¡å°±æ˜¯è®¾è®¡å¹¶å®ç°ä¸‹é¢çš„å‡½æ•°åŸå‹.
+//
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-// Õâ¸öº¯Êı³õÊ¼»¯TCB±í, ½«ËùÓĞÌõÄ¿±ê¼ÇÎªNULL.  
-// Ëü»¹Õë¶ÔTCPÌ×½Ó×ÖÃèÊö·ûconn³õÊ¼»¯Ò»¸öSTCP²ãµÄÈ«¾Ö±äÁ¿, ¸Ã±äÁ¿×÷Îªsip_sendsegºÍsip_recvsegµÄÊäÈë²ÎÊı.
-// ×îºó, Õâ¸öº¯ÊıÆô¶¯seghandlerÏß³ÌÀ´´¦Àí½øÈëµÄSTCP¶Î. ¿Í»§¶ËÖ»ÓĞÒ»¸öseghandler.
-void stcp_client_init(int conn) 
-{
-    return;
+void sendbuf_send(int sockfd);
+void sendbuf_ack(int sockfd, unsigned seqnum);
+int getTime();
+
+tcb_list_item tcb_list[MAX_TRANSPORT_CONNECTIONS];
+unsigned int gSeqNum = 0;
+int sip_sockfd;
+
+// stcpå®¢æˆ·ç«¯åˆå§‹åŒ–
+//
+// è¿™ä¸ªå‡½æ•°åˆå§‹åŒ–TCBè¡¨, å°†æ‰€æœ‰æ¡ç›®æ ‡è®°ä¸ºNULL.  
+// å®ƒè¿˜é’ˆå¯¹é‡å ç½‘ç»œTCPå¥—æ¥å­—æè¿°ç¬¦connåˆå§‹åŒ–ä¸€ä¸ªSTCPå±‚çš„å…¨å±€å˜é‡, è¯¥å˜é‡ä½œä¸ºsip_sendsegå’Œsip_recvsegçš„è¾“å…¥å‚æ•°.
+// æœ€å, è¿™ä¸ªå‡½æ•°å¯åŠ¨seghandlerçº¿ç¨‹æ¥å¤„ç†è¿›å…¥çš„STCPæ®µ. å®¢æˆ·ç«¯åªæœ‰ä¸€ä¸ªseghandler.
+//
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+//
+
+void stcp_client_init(int conn) {
+	for(int i = 0; i < MAX_TRANSPORT_CONNECTIONS; i ++) {
+		tcb_list[i].used = 0;
+	}
+
+	Log("STCP client initialized.");
+	sip_sockfd = conn;
+
+	pthread_t tid;
+	pthread_create(&tid, NULL, seghandler, NULL);
+	Assert(tid > 0, "Creating seghandler thread failure!");
 }
 
-// Õâ¸öº¯Êı²éÕÒ¿Í»§¶ËTCB±íÒÔÕÒµ½µÚÒ»¸öNULLÌõÄ¿, È»ºóÊ¹ÓÃmalloc()Îª¸ÃÌõÄ¿´´½¨Ò»¸öĞÂµÄTCBÌõÄ¿.
-// ¸ÃTCBÖĞµÄËùÓĞ×Ö¶Î¶¼±»³õÊ¼»¯. ÀıÈç, TCB state±»ÉèÖÃÎªCLOSED£¬¿Í»§¶Ë¶Ë¿Ú±»ÉèÖÃÎªº¯Êıµ÷ÓÃ²ÎÊıclient_port. 
-// TCB±íÖĞÌõÄ¿µÄË÷ÒıºÅÓ¦×÷Îª¿Í»§¶ËµÄĞÂÌ×½Ó×ÖID±»Õâ¸öº¯Êı·µ»Ø, ËüÓÃÓÚ±êÊ¶¿Í»§¶ËµÄÁ¬½Ó. 
-// Èç¹ûTCB±íÖĞÃ»ÓĞÌõÄ¿¿ÉÓÃ, Õâ¸öº¯Êı·µ»Ø-1.
-int stcp_client_sock(unsigned int client_port) 
-{
-	return 0;
+// åˆ›å»ºä¸€ä¸ªå®¢æˆ·ç«¯TCBæ¡ç›®, è¿”å›å¥—æ¥å­—æè¿°ç¬¦
+//
+// è¿™ä¸ªå‡½æ•°æŸ¥æ‰¾å®¢æˆ·ç«¯TCBè¡¨ä»¥æ‰¾åˆ°ç¬¬ä¸€ä¸ªNULLæ¡ç›®, ç„¶åä½¿ç”¨malloc()ä¸ºè¯¥æ¡ç›®åˆ›å»ºä¸€ä¸ªæ–°çš„TCBæ¡ç›®.
+// è¯¥TCBä¸­çš„æ‰€æœ‰å­—æ®µéƒ½è¢«åˆå§‹åŒ–. ä¾‹å¦‚, TCB stateè¢«è®¾ç½®ä¸ºCLOSEDï¼Œå®¢æˆ·ç«¯ç«¯å£è¢«è®¾ç½®ä¸ºå‡½æ•°è°ƒç”¨å‚æ•°client_port. 
+// TCBè¡¨ä¸­æ¡ç›®çš„ç´¢å¼•å·åº”ä½œä¸ºå®¢æˆ·ç«¯çš„æ–°å¥—æ¥å­—IDè¢«è¿™ä¸ªå‡½æ•°è¿”å›, å®ƒç”¨äºæ ‡è¯†å®¢æˆ·ç«¯çš„è¿æ¥. 
+// å¦‚æœTCBè¡¨ä¸­æ²¡æœ‰æ¡ç›®å¯ç”¨, è¿™ä¸ªå‡½æ•°è¿”å›-1.
+//
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+//
+
+int stcp_client_sock(unsigned int client_port) {
+	int i;
+	for(i = 0; i < MAX_TRANSPORT_CONNECTIONS; i ++) {
+		if(tcb_list[i].used == 0) {
+			break;
+		}
+	}
+
+	if(i == MAX_TRANSPORT_CONNECTIONS) {
+		Log("No empty TCB!\n");
+		return -1;
+	} else {
+		tcb_list[i].used = 1;
+		memset(&tcb_list[i].tcb, 0, sizeof(tcb_list[i].tcb));
+		tcb_list[i].tcb.state = CLOSED;
+		tcb_list[i].tcb.client_portNum = client_port;
+		tcb_list[i].tcb.bufMutex = malloc(sizeof(pthread_mutex_t));
+		pthread_mutex_init(tcb_list[i].tcb.bufMutex, 0);
+		tcb_list[i].tcb.next_seqNum = gSeqNum;
+
+		Log("Client socket %d was created.", i);
+		return i;
+	}
 }
 
-// Õâ¸öº¯ÊıÓÃÓÚÁ¬½Ó·şÎñÆ÷. ËüÒÔÌ×½Ó×ÖID, ·şÎñÆ÷½ÚµãIDºÍ·şÎñÆ÷µÄ¶Ë¿ÚºÅ×÷ÎªÊäÈë²ÎÊı. Ì×½Ó×ÖIDÓÃÓÚÕÒµ½TCBÌõÄ¿.  
-// Õâ¸öº¯ÊıÉèÖÃTCBµÄ·şÎñÆ÷½ÚµãIDºÍ·şÎñÆ÷¶Ë¿ÚºÅ,  È»ºóÊ¹ÓÃsip_sendseg()·¢ËÍÒ»¸öSYN¶Î¸ø·şÎñÆ÷.  
-// ÔÚ·¢ËÍÁËSYN¶ÎÖ®ºó, Ò»¸ö¶¨Ê±Æ÷±»Æô¶¯. Èç¹ûÔÚSYNSEG_TIMEOUTÊ±¼äÖ®ÄÚÃ»ÓĞÊÕµ½SYNACK, SYN ¶Î½«±»ÖØ´«. 
-// Èç¹ûÊÕµ½ÁË, ¾Í·µ»Ø1. ·ñÔò, Èç¹ûÖØ´«SYNµÄ´ÎÊı´óÓÚSYN_MAX_RETRY, ¾Í½«state×ª»»µ½CLOSED, ²¢·µ»Ø-1.
-int stcp_client_connect(int sockfd, int nodeID, unsigned int server_port) 
-{
-	return 0;
+// è¿æ¥STCPæœåŠ¡å™¨
+//
+// è¿™ä¸ªå‡½æ•°ç”¨äºè¿æ¥æœåŠ¡å™¨. å®ƒä»¥å¥—æ¥å­—IDå’ŒæœåŠ¡å™¨çš„ç«¯å£å·ä½œä¸ºè¾“å…¥å‚æ•°. å¥—æ¥å­—IDç”¨äºæ‰¾åˆ°TCBæ¡ç›®.  
+// è¿™ä¸ªå‡½æ•°è®¾ç½®TCBçš„æœåŠ¡å™¨ç«¯å£å·,  ç„¶åä½¿ç”¨sip_sendseg()å‘é€ä¸€ä¸ªSYNæ®µç»™æœåŠ¡å™¨.  
+// åœ¨å‘é€äº†SYNæ®µä¹‹å, ä¸€ä¸ªå®šæ—¶å™¨è¢«å¯åŠ¨. å¦‚æœåœ¨SYNSEG_TIMEOUTæ—¶é—´ä¹‹å†…æ²¡æœ‰æ”¶åˆ°SYNACK, SYN æ®µå°†è¢«é‡ä¼ . 
+// å¦‚æœæ”¶åˆ°äº†, å°±è¿”å›1. å¦åˆ™, å¦‚æœé‡ä¼ SYNçš„æ¬¡æ•°å¤§äºSYN_MAX_RETRY, å°±å°†stateè½¬æ¢åˆ°CLOSED, å¹¶è¿”å›-1.
+//
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+//
+
+int stcp_client_connect(int sockfd, int nodeID, unsigned int server_port) {
+	assert(tcb_list[sockfd].used == 1);
+	assert(tcb_list[sockfd].tcb.state == CLOSED);
+
+	tcb_list[sockfd].tcb.server_portNum = server_port;
+
+	seg_t seg;
+	make_seg(&seg, &tcb_list[sockfd], SYN, NULL, 0);
+	stcp_hdr_to_network_order(&seg.header);
+
+	tcb_list[sockfd].tcb.state = SYNSENT;
+
+	int n = SYN_MAX_RETRY;
+	while(n --> 0) {	// interesting --> operator
+		if(sip_sendseg(sip_sockfd, &seg) == 1) {
+			Log("STCP client socket %d sending SYN %d!", sockfd, SYN_MAX_RETRY - n);
+		} else {
+			Log("STCP client socket %d sending SYN %d failed!", sockfd, SYN_MAX_RETRY - n);
+		}
+
+		usleep(SYN_TIMEOUT / 1000);
+
+		if(tcb_list[sockfd].tcb.state == CONNECTED) {
+			return 1;
+		}
+
+		Log("STCP client socket %d SYN %d timeout!", sockfd, SYN_MAX_RETRY - n);
+	}
+
+	tcb_list[sockfd].tcb.state = CLOSED;
+
+	return -1;
 }
 
-// ·¢ËÍÊı¾İ¸øSTCP·şÎñÆ÷. Õâ¸öº¯ÊıÊ¹ÓÃÌ×½Ó×ÖIDÕÒµ½TCB±íÖĞµÄÌõÄ¿.
-// È»ºóËüÊ¹ÓÃÌá¹©µÄÊı¾İ´´½¨segBuf, ½«Ëü¸½¼Óµ½·¢ËÍ»º³åÇøÁ´±íÖĞ.
-// Èç¹û·¢ËÍ»º³åÇøÔÚ²åÈëÊı¾İÖ®Ç°Îª¿Õ, Ò»¸öÃûÎªsendbuf_timerµÄÏß³Ì¾Í»áÆô¶¯.
-// Ã¿¸ôSENDBUF_ROLLING_INTERVALÊ±¼ä²éÑ¯·¢ËÍ»º³åÇøÒÔ¼ì²éÊÇ·ñÓĞ³¬Ê±ÊÂ¼ş·¢Éú. 
-// Õâ¸öº¯ÊıÔÚ³É¹¦Ê±·µ»Ø1£¬·ñÔò·µ»Ø-1. 
-// stcp_client_sendÊÇÒ»¸ö·Ç×èÈûº¯Êıµ÷ÓÃ.
-// ÒòÎªÓÃ»§Êı¾İ±»·ÖÆ¬Îª¹Ì¶¨´óĞ¡µÄSTCP¶Î, ËùÒÔÒ»´Îstcp_client_sendµ÷ÓÃ¿ÉÄÜ»á²úÉú¶à¸ösegBuf
-// ±»Ìí¼Óµ½·¢ËÍ»º³åÇøÁ´±íÖĞ. Èç¹ûµ÷ÓÃ³É¹¦, Êı¾İ¾Í±»·ÅÈëTCB·¢ËÍ»º³åÇøÁ´±íÖĞ, ¸ù¾İ»¬¶¯´°¿ÚµÄÇé¿ö,
-// Êı¾İ¿ÉÄÜ±»´«Êäµ½ÍøÂçÖĞ, »òÔÚ¶ÓÁĞÖĞµÈ´ı´«Êä.
-int stcp_client_send(int sockfd, void* data, unsigned int length) 
-{
-    return 0;
+// å‘é€æ•°æ®ç»™STCPæœåŠ¡å™¨
+//
+// è¿™ä¸ªå‡½æ•°å‘é€æ•°æ®ç»™STCPæœåŠ¡å™¨. ä½ ä¸éœ€è¦åœ¨æœ¬å®éªŒä¸­å®ç°å®ƒã€‚
+//
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+//
+
+int stcp_client_send(int sockfd, void* data, unsigned int length) {
+	assert(tcb_list[sockfd].used == 1);
+	assert(tcb_list[sockfd].tcb.state == CONNECTED);
+	assert(data && (length > 0));
+
+	// pack data to buffer
+	pthread_mutex_lock(tcb_list[sockfd].tcb.bufMutex);
+	int n = (length + MAX_SEG_LEN - 1) / MAX_SEG_LEN;
+	for(int i = 0; i < n; i ++) {
+		segBuf_t *pseg = malloc(sizeof(segBuf_t));
+		memset(pseg, 0, sizeof(segBuf_t));
+		make_seg(&pseg->seg, &tcb_list[sockfd], DATA, data, length >= MAX_SEG_LEN ? MAX_SEG_LEN : length);
+		stcp_hdr_to_network_order(&pseg->seg.header);
+
+		if(tcb_list[sockfd].tcb.sendBufHead == NULL) {
+			tcb_list[sockfd].tcb.sendBufHead = pseg;
+			tcb_list[sockfd].tcb.sendBufTail = pseg;
+			tcb_list[sockfd].tcb.sendBufunSent = pseg;
+		} else {
+			tcb_list[sockfd].tcb.sendBufTail->next = pseg;
+			tcb_list[sockfd].tcb.sendBufTail = pseg;
+			if(tcb_list[sockfd].tcb.sendBufunSent == NULL) {
+				tcb_list[sockfd].tcb.sendBufunSent = pseg;
+			}
+		}
+
+		Log("STCP client socket %d add user data to sendBuf.", sockfd);
+
+		data += MAX_SEG_LEN;
+		length -= MAX_SEG_LEN;
+	}
+
+	pthread_mutex_unlock(tcb_list[sockfd].tcb.bufMutex);
+
+	// send data out
+	sendbuf_send(sockfd);
+
+	return 1;
 }
 
-// Õâ¸öº¯ÊıÓÃÓÚ¶Ï¿ªµ½·şÎñÆ÷µÄÁ¬½Ó. ËüÒÔÌ×½Ó×ÖID×÷ÎªÊäÈë²ÎÊı. Ì×½Ó×ÖIDÓÃÓÚÕÒµ½TCB±íÖĞµÄÌõÄ¿.  
-// Õâ¸öº¯Êı·¢ËÍFIN¶Î¸ø·şÎñÆ÷. ÔÚ·¢ËÍFINÖ®ºó, state½«×ª»»µ½FINWAIT, ²¢Æô¶¯Ò»¸ö¶¨Ê±Æ÷.
-// Èç¹ûÔÚ×îÖÕ³¬Ê±Ö®Ç°state×ª»»µ½CLOSED, Ôò±íÃ÷FINACKÒÑ±»³É¹¦½ÓÊÕ. ·ñÔò, Èç¹ûÔÚ¾­¹ıFIN_MAX_RETRY´Î³¢ÊÔÖ®ºó,
-// stateÈÔÈ»ÎªFINWAIT, state½«×ª»»µ½CLOSED, ²¢·µ»Ø-1.
-int stcp_client_disconnect(int sockfd) 
-{
-	return 0;
+// æ–­å¼€åˆ°STCPæœåŠ¡å™¨çš„è¿æ¥
+//
+// è¿™ä¸ªå‡½æ•°ç”¨äºæ–­å¼€åˆ°æœåŠ¡å™¨çš„è¿æ¥. å®ƒä»¥å¥—æ¥å­—IDä½œä¸ºè¾“å…¥å‚æ•°. å¥—æ¥å­—IDç”¨äºæ‰¾åˆ°TCBè¡¨ä¸­çš„æ¡ç›®.  
+// è¿™ä¸ªå‡½æ•°å‘é€FIN segmentç»™æœåŠ¡å™¨. åœ¨å‘é€FINä¹‹å, stateå°†è½¬æ¢åˆ°FINWAIT, å¹¶å¯åŠ¨ä¸€ä¸ªå®šæ—¶å™¨.
+// å¦‚æœåœ¨æœ€ç»ˆè¶…æ—¶ä¹‹å‰stateè½¬æ¢åˆ°CLOSED, åˆ™è¡¨æ˜FINACKå·²è¢«æˆåŠŸæ¥æ”¶. å¦åˆ™, å¦‚æœåœ¨ç»è¿‡FIN_MAX_RETRYæ¬¡å°è¯•ä¹‹å,
+// stateä»ç„¶ä¸ºFINWAIT, stateå°†è½¬æ¢åˆ°CLOSED, å¹¶è¿”å›-1.
+//
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+//
+
+int stcp_client_disconnect(int sockfd) {
+	assert(tcb_list[sockfd].used == 1);
+	assert(tcb_list[sockfd].tcb.state == CONNECTED);
+
+	seg_t seg;
+	make_seg(&seg, &tcb_list[sockfd], FIN, NULL, 0);
+	stcp_hdr_to_network_order(&seg.header);
+
+	tcb_list[sockfd].tcb.state = FINWAIT;
+
+	int n = FIN_MAX_RETRY;
+	while(n --> 0) {
+		if(sip_sendseg(sip_sockfd, &seg) == 1) {
+			Log("STCP client %d sending FIN %d!", sockfd, FIN_MAX_RETRY - n);
+		} else {
+			Log("STCP client %d sending FIN %d failed!", sockfd, FIN_MAX_RETRY - n);
+		}
+
+		usleep(FIN_TIMEOUT / 1000);
+
+		if(tcb_list[sockfd].tcb.state == CLOSED) {
+			return 1;
+		}
+
+		Log("STCP client %d FIN %d timeout!", sockfd, FIN_MAX_RETRY - n);
+	}
+
+	tcb_list[sockfd].tcb.state = CLOSED;
+
+	// free sendbuf
+	pthread_mutex_lock(tcb_list[sockfd].tcb.bufMutex);
+	while(tcb_list[sockfd].tcb.sendBufHead) {
+		segBuf_t *tmp = tcb_list[sockfd].tcb.sendBufHead;
+		tcb_list[sockfd].tcb.sendBufHead = tcb_list[sockfd].tcb.sendBufHead->next;
+		free(tmp);
+	}
+	pthread_mutex_unlock(tcb_list[sockfd].tcb.bufMutex);
+
+	return -1;
 }
 
-// Õâ¸öº¯Êıµ÷ÓÃfree()ÊÍ·ÅTCBÌõÄ¿. Ëü½«¸ÃÌõÄ¿±ê¼ÇÎªNULL, ³É¹¦Ê±(¼´Î»ÓÚÕıÈ·µÄ×´Ì¬)·µ»Ø1,
-// Ê§°ÜÊ±(¼´Î»ÓÚ´íÎóµÄ×´Ì¬)·µ»Ø-1.
-int stcp_client_close(int sockfd) 
-{
-	return 0;
+// å…³é—­STCPå®¢æˆ·
+//
+// è¿™ä¸ªå‡½æ•°è°ƒç”¨free()é‡Šæ”¾TCBæ¡ç›®. å®ƒå°†è¯¥æ¡ç›®æ ‡è®°ä¸ºNULL, æˆåŠŸæ—¶(å³ä½äºæ­£ç¡®çš„çŠ¶æ€)è¿”å›1,
+// å¤±è´¥æ—¶(å³ä½äºé”™è¯¯çš„çŠ¶æ€)è¿”å›-1.
+//
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+//
+
+int stcp_client_close(int sockfd) {
+	if(tcb_list[sockfd].tcb.state == CLOSED) {
+		tcb_list[sockfd].used = 0;
+		free(tcb_list[sockfd].tcb.bufMutex);
+		Log("STCP client %d close succeeds.", sockfd);
+		return 1;
+	} else {
+		Log("STCP client %d close fails.", sockfd);
+		return -1;
+	}
 }
 
-// ÕâÊÇÓÉstcp_client_init()Æô¶¯µÄÏß³Ì. Ëü´¦ÀíËùÓĞÀ´×Ô·şÎñÆ÷µÄ½øÈë¶Î. 
-// seghandler±»Éè¼ÆÎªÒ»¸öµ÷ÓÃsip_recvseg()µÄÎŞÇîÑ­»·. Èç¹ûsip_recvseg()Ê§°Ü, ÔòËµÃ÷µ½SIP½ø³ÌµÄÁ¬½ÓÒÑ¹Ø±Õ,
-// Ïß³Ì½«ÖÕÖ¹. ¸ù¾İSTCP¶Îµ½´ïÊ±Á¬½ÓËù´¦µÄ×´Ì¬, ¿ÉÒÔ²ÉÈ¡²»Í¬µÄ¶¯×÷. Çë²é¿´¿Í»§¶ËFSMÒÔÁË½â¸ü¶àÏ¸½Ú.
-void* seghandler(void* arg) 
-{
-	return;
+// å¤„ç†è¿›å…¥æ®µçš„çº¿ç¨‹
+//
+// è¿™æ˜¯ç”±stcp_client_init()å¯åŠ¨çš„çº¿ç¨‹. å®ƒå¤„ç†æ‰€æœ‰æ¥è‡ªæœåŠ¡å™¨çš„è¿›å…¥æ®µ. 
+// seghandlerè¢«è®¾è®¡ä¸ºä¸€ä¸ªè°ƒç”¨sip_recvseg()çš„æ— ç©·å¾ªç¯. å¦‚æœsip_recvseg()å¤±è´¥, åˆ™è¯´æ˜é‡å ç½‘ç»œè¿æ¥å·²å…³é—­,
+// çº¿ç¨‹å°†ç»ˆæ­¢. æ ¹æ®STCPæ®µåˆ°è¾¾æ—¶è¿æ¥æ‰€å¤„çš„çŠ¶æ€, å¯ä»¥é‡‡å–ä¸åŒçš„åŠ¨ä½œ. è¯·æŸ¥çœ‹å®¢æˆ·ç«¯FSMä»¥äº†è§£æ›´å¤šç»†èŠ‚.
+//
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+//
+
+int get_socket_by_port(unsigned src_port, unsigned dest_port) {
+	for(int i = 0; i < MAX_TRANSPORT_CONNECTIONS; i ++) {
+		if((tcb_list[i].used == 1)
+			&& (tcb_list[i].tcb.client_portNum == src_port)
+			&& (tcb_list[i].tcb.server_portNum == dest_port)) {
+			return i;
+		}
+	}
+
+	return -1;
 }
 
 
-//Õâ¸öÏß³Ì³ÖĞøÂÖÑ¯·¢ËÍ»º³åÇøÒÔ´¥·¢³¬Ê±ÊÂ¼ş. Èç¹û·¢ËÍ»º³åÇø·Ç¿Õ, ËüÓ¦Ò»Ö±ÔËĞĞ.
-//Èç¹û(µ±Ç°Ê±¼ä - µÚÒ»¸öÒÑ·¢ËÍµ«Î´±»È·ÈÏ¶ÎµÄ·¢ËÍÊ±¼ä) > DATA_TIMEOUT, ¾Í·¢ÉúÒ»´Î³¬Ê±ÊÂ¼ş.
-//µ±³¬Ê±ÊÂ¼ş·¢ÉúÊ±, ÖØĞÂ·¢ËÍËùÓĞÒÑ·¢ËÍµ«Î´±»È·ÈÏ¶Î. µ±·¢ËÍ»º³åÇøÎª¿ÕÊ±, Õâ¸öÏß³Ì½«ÖÕÖ¹.
-void* sendBuf_timer(void* clienttcb) 
-{
-	return;
+void *seghandler(void* arg) {
+	Log("Issuing seghandler.");
+
+	int sfd;
+	seg_t seg;
+	while(1) {
+		int ret = sip_recvseg(sip_sockfd, &seg);
+
+		if(ret == -1) {
+			Log("sip receive segment failed, exit!");
+			pthread_exit(NULL);
+		} else if(ret == 1) {
+			Log("STCP client sip_recvseg was lost!");
+			continue;
+		}
+
+		stcp_hdr_to_host_order(&seg.header);
+
+		if((sfd = get_socket_by_port(seg.header.dest_port, seg.header.src_port)) == -1) {
+			Assert(0, "Invalid connection!");
+		}
+
+		switch(tcb_list[sfd].tcb.state) {
+			case CLOSED: {
+				break;
+			}
+
+			case SYNSENT: {
+				if(seg.header.type == SYNACK) {
+					tcb_list[sfd].tcb.state = CONNECTED;
+					Log("STCP client %d receiving SYNACK!", sfd);
+				}
+
+				break;
+			}
+
+			case CONNECTED: {
+				if(seg.header.type == DATAACK) {
+					Log("STCP client %d received DATAACK!", sfd);
+					sendbuf_ack(sfd, seg.header.ack_num);
+					sendbuf_send(sfd);
+				}
+
+				break;
+			}
+
+			case FINWAIT: {
+				if(seg.header.type == FINACK) {
+					tcb_list[sfd].tcb.state = CLOSED;
+					Log("STCP client %d receiving FINACK!", sfd);
+				}
+
+				break;
+			}
+
+			default:	Assert(0, "Invalid state!");
+		}
+	}
+}
+
+
+// è¿™ä¸ªçº¿ç¨‹æŒç»­è½®è¯¢å‘é€ç¼“å†²åŒºä»¥è§¦å‘è¶…æ—¶äº‹ä»¶. å¦‚æœå‘é€ç¼“å†²åŒºéç©º, å®ƒåº”ä¸€ç›´è¿è¡Œ.
+// å¦‚æœ(å½“å‰æ—¶é—´ - ç¬¬ä¸€ä¸ªå·²å‘é€ä½†æœªè¢«ç¡®è®¤æ®µçš„å‘é€æ—¶é—´) > DATA_TIMEOUT, å°±å‘ç”Ÿä¸€æ¬¡è¶…æ—¶äº‹ä»¶.
+// å½“è¶…æ—¶äº‹ä»¶å‘ç”Ÿæ—¶, é‡æ–°å‘é€æ‰€æœ‰å·²å‘é€ä½†æœªè¢«ç¡®è®¤æ®µ. å½“å‘é€ç¼“å†²åŒºä¸ºç©ºæ—¶, è¿™ä¸ªçº¿ç¨‹å°†ç»ˆæ­¢.
+//
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+//`1
+void* sendBuf_timer(void* clienttcb) {
+	assert(clienttcb);
+
+	tcb_list_item *ptcb = (tcb_list_item*)clienttcb;
+	assert(ptcb->used == 1);
+
+	pthread_mutex_lock(ptcb->tcb.bufMutex);
+
+	while(ptcb->tcb.unAck_segNum > 0) {
+		// data timeout, resend all unacked segment
+		if(getTime() - ptcb->tcb.sendBufHead->sentTime > DATA_TIMEOUT / 1000) {
+			Log("STCP client send buffer timeout, resending...");
+			for(segBuf_t *sb = ptcb->tcb.sendBufHead; sb && (sb != ptcb->tcb.sendBufunSent); sb = sb->next) {
+				if(sip_sendseg(sip_sockfd, &sb->seg) == 1) {
+					Log("Resended segment sequence number: %d", ntohl(sb->seg.header.seq_num));
+					sb->sentTime = getTime();
+				} else {
+					Log("Sending segment failed!");
+				}
+			}
+		}
+		pthread_mutex_unlock(ptcb->tcb.bufMutex);
+
+		usleep(SENDBUF_POLLING_INTERVAL / 1000);
+
+		pthread_mutex_lock(ptcb->tcb.bufMutex);
+	}
+
+	pthread_mutex_unlock(ptcb->tcb.bufMutex);
+
+	Log("sendbuf timer exit");
+	pthread_exit(NULL);
+
+	return NULL;
+}
+
+void sendbuf_send(int sockfd) {
+	pthread_mutex_lock(tcb_list[sockfd].tcb.bufMutex);
+	
+	while((tcb_list[sockfd].tcb.sendBufunSent != NULL) && 
+			(tcb_list[sockfd].tcb.unAck_segNum < GBN_WINDOW)) {
+
+		if(sip_sendseg(sip_sockfd, &(tcb_list[sockfd].tcb.sendBufunSent->seg)) == 1) {
+			Log("Sending segment out. seq_num = %d.", ntohl(tcb_list[sockfd].tcb.sendBufunSent->seg.header.seq_num));
+		} else {
+			Log("Sending segment failed.");
+		}
+		tcb_list[sockfd].tcb.sendBufunSent->sentTime = getTime();
+
+		if(tcb_list[sockfd].tcb.unAck_segNum == 0) {
+			pthread_t tid;
+			pthread_create(&tid, NULL, sendBuf_timer, (void*)&tcb_list[sockfd]);
+			Assert(tid > 0, "Creating sendBuf timer failed!");
+		}
+
+		tcb_list[sockfd].tcb.unAck_segNum ++;
+		tcb_list[sockfd].tcb.sendBufunSent = tcb_list[sockfd].tcb.sendBufunSent->next;
+	}
+
+	pthread_mutex_unlock(tcb_list[sockfd].tcb.bufMutex);
+}
+
+void sendbuf_ack(int sockfd, unsigned seqnum) {
+	//Log("Receiving ack number: %u", seqnum);
+	pthread_mutex_lock(tcb_list[sockfd].tcb.bufMutex);
+
+	segBuf_t *p = tcb_list[sockfd].tcb.sendBufHead;
+	while(p && (ntohl(p->seg.header.seq_num) < seqnum)) {
+		tcb_list[sockfd].tcb.sendBufHead = tcb_list[sockfd].tcb.sendBufHead->next;
+		tcb_list[sockfd].tcb.unAck_segNum --;
+		segBuf_t *tmp = p;
+		p = p->next;
+		Log("Received seq_number: %d, free seq_num = %d, unAck_segNum = %d", seqnum, ntohl(tmp->seg.header.seq_num), tcb_list[sockfd].tcb.unAck_segNum);
+		free(tmp);
+	}
+
+	if(p != NULL) {
+		Assert(ntohl(p->seg.header.seq_num) == seqnum, "Invalid seqnum!!!");
+	}
+
+	pthread_mutex_unlock(tcb_list[sockfd].tcb.bufMutex);
+}
+
+void make_seg(seg_t *pseg, tcb_list_item *ptcb, unsigned short type, char *data, unsigned len) {
+	assert(pseg && ptcb && ptcb->used);
+
+	memset(pseg, 0, sizeof(seg_t));
+	pseg->header.src_port = ptcb->tcb.client_portNum;
+	pseg->header.dest_port = ptcb->tcb.server_portNum;
+	pseg->header.seq_num = ptcb->tcb.next_seqNum;
+	pseg->header.length = sizeof(stcp_hdr_t);
+	pseg->header.type = type;
+	pseg->header.checksum = 0;
+	pseg->data_len = 0;
+
+	if(data && len) {
+		pseg->data_len = len;
+		//pseg->header.length = len;
+		memcpy(pseg->data, data, len);
+		ptcb->tcb.next_seqNum += len;
+	}
+
+	pseg->header.checksum = checksum(pseg);
+}
+
+// Get current time(ms)
+int getTime() {
+	struct timeval currentTime;
+	gettimeofday(&currentTime, NULL);
+	return (currentTime.tv_sec * 1000000 + currentTime.tv_usec);
 }
 
