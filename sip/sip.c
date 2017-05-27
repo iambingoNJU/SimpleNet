@@ -19,6 +19,7 @@
 #include <pthread.h>
 #include <unistd.h>
 
+#include "../common/debug.h"
 #include "../common/constants.h"
 #include "../common/pkt.h"
 #include "../common/seg.h"
@@ -34,14 +35,23 @@
 /**************************************************************/
 //声明全局变量
 /**************************************************************/
-int son_conn; 			//到重叠网络的连接
+int son_conn = -1; 		//到重叠网络的连接
 int stcp_conn;			//到STCP的连接
 nbr_cost_entry_t* nct;			//邻居代价表
 dv_t* dv;				//距离矢量表
 pthread_mutex_t* dv_mutex;		//距离矢量表互斥量
 routingtable_t* routingtable;		//路由表
 pthread_mutex_t* routingtable_mutex;	//路由表互斥量
+pthread_t pkt_handler_thread = -1; 
+pthread_t routeupdate_thread = -1;
 
+
+void sip_hdr_to_network_order(sip_hdr_t *piphdr) {
+	piphdr->src_nodeID = htonl(piphdr->src_nodeID);
+	piphdr->dest_nodeID = htonl(piphdr->dest_nodeID);
+	piphdr->type = htons(piphdr->type);
+	piphdr->length = htons(piphdr->length);
+}
 /**************************************************************/
 //实现SIP的函数
 /**************************************************************/
@@ -49,30 +59,67 @@ pthread_mutex_t* routingtable_mutex;	//路由表互斥量
 //SIP进程使用这个函数连接到本地SON进程的端口SON_PORT.
 //成功时返回连接描述符, 否则返回-1.
 int connectToSON() { 
-	//你需要编写这里的代码.
-  return 0;
+	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	Assert(sockfd > 0, "create socket failed!");
+
+	struct sockaddr_in localaddr;
+	memset(&localaddr, 0, sizeof(localaddr));
+	localaddr.sin_family = AF_INET;
+	localaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+	localaddr.sin_port = htons(SON_PORT);
+
+	if(connect(sockfd, (struct sockaddr*)&localaddr, sizeof(localaddr)) == -1) {
+		Log("SIP connects SON failed!");
+		return -1;
+	} else {
+		Log("SIP connects SON succeeded!");
+		return sockfd;
+	}
 }
 
 //这个线程每隔ROUTEUPDATE_INTERVAL时间发送路由更新报文.路由更新报文包含这个节点
 //的距离矢量.广播是通过设置SIP报文头中的dest_nodeID为BROADCAST_NODEID,并通过son_sendpkt()发送报文来完成的.
 void* routeupdate_daemon(void* arg) {
-	//你需要编写这里的代码.
-  return 0;
+	sip_pkt_t pkt;
+	memset(&pkt, 0, sizeof(pkt));
+
+	topology_init();
+	pkt.header.src_nodeID = topology_getMyNodeID();
+	pkt.header.dest_nodeID = BROADCAST_NODEID;
+	pkt.header.type = ROUTE_UPDATE;
+	pkt.header.length = 0;
+
+	sip_hdr_to_network_order(&pkt.header);
+
+	while(son_sendpkt(BROADCAST_NODEID, &pkt, son_conn) > 0) {
+		Log("Sending UPDATE ROUTE message!!!");
+		sleep(ROUTEUPDATE_INTERVAL);
+	}
+
+	Log("routeupdate daemon thread exits.");
+	pthread_exit(NULL);
+
+	return NULL;
 }
 
 //这个线程处理来自SON进程的进入报文. 它通过调用son_recvpkt()接收来自SON进程的报文.
 //如果报文是SIP报文,并且目的节点就是本节点,就转发报文给STCP进程. 如果目的节点不是本节点,
 //就根据路由表转发报文给下一跳.如果报文是路由更新报文,就更新距离矢量表和路由表.
 void* pkthandler(void* arg) {
-	//你需要编写这里的代码.
-  return 0;
+	sip_pkt_t pkt;
+
+	while(son_recvpkt(&pkt,son_conn) > 0) {
+		printf("Routing: received a packet from neighbor %d\n", ntohl(pkt.header.src_nodeID));
+	}
+
+	Log("pkthandler thread exits.");
+	pthread_exit(NULL);
 }
 
 //这个函数终止SIP进程, 当SIP进程收到信号SIGINT时会调用这个函数. 
 //它关闭所有连接, 释放所有动态分配的内存.
 void sip_stop() {
-	//你需要编写这里的代码.
-  return;
+	close(son_conn);
 }
 
 //这个函数打开端口SIP_PORT并等待来自本地STCP进程的TCP连接.
@@ -130,5 +177,4 @@ int main(int argc, char *argv[]) {
 	waitSTCP(); 
 
 }
-
 

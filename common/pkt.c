@@ -1,75 +1,150 @@
-// ÎÄ¼şÃû pkt.c
-// ´´½¨ÈÕÆÚ: 2015Äê
+// æ–‡ä»¶å: common/pkt.c
+// åˆ›å»ºæ—¥æœŸ: 2015å¹´
 
+#include <string.h>
+#include <netinet/in.h>
+
+#include "lib-socket.h"
+#include "debug.h"
 #include "pkt.h"
 
-// son_sendpkt()ÓÉSIP½ø³Ìµ÷ÓÃ, Æä×÷ÓÃÊÇÒªÇóSON½ø³Ì½«±¨ÎÄ·¢ËÍµ½ÖØµşÍøÂçÖĞ. SON½ø³ÌºÍSIP½ø³ÌÍ¨¹ıÒ»¸ö±¾µØTCPÁ¬½Ó»¥Á¬.
-// ÔÚson_sendpkt()ÖĞ, ±¨ÎÄ¼°ÆäÏÂÒ»ÌøµÄ½ÚµãID±»·â×°½øÊı¾İ½á¹¹sendpkt_arg_t, ²¢Í¨¹ıTCPÁ¬½Ó·¢ËÍ¸øSON½ø³Ì. 
-// ²ÎÊıson_connÊÇSIP½ø³ÌºÍSON½ø³ÌÖ®¼äµÄTCPÁ¬½ÓÌ×½Ó×ÖÃèÊö·û.
-// µ±Í¨¹ıSIP½ø³ÌºÍSON½ø³ÌÖ®¼äµÄTCPÁ¬½Ó·¢ËÍÊı¾İ½á¹¹sendpkt_arg_tÊ±, Ê¹ÓÃ'!&'ºÍ'!#'×÷Îª·Ö¸ô·û, °´ÕÕ'!& sendpkt_arg_t½á¹¹ !#'µÄË³Ğò·¢ËÍ.
-// Èç¹û·¢ËÍ³É¹¦, ·µ»Ø1, ·ñÔò·µ»Ø-1.
-int son_sendpkt(int nextNodeID, sip_pkt_t* pkt, int son_conn)
-{
-  return 0;
+// son_sendpkt()ç”±SIPè¿›ç¨‹è°ƒç”¨, å…¶ä½œç”¨æ˜¯è¦æ±‚SONè¿›ç¨‹å°†æŠ¥æ–‡å‘é€åˆ°é‡å ç½‘ç»œä¸­. SONè¿›ç¨‹å’ŒSIPè¿›ç¨‹é€šè¿‡ä¸€ä¸ªæœ¬åœ°TCPè¿æ¥äº’è¿.
+// åœ¨son_sendpkt()ä¸­, æŠ¥æ–‡åŠå…¶ä¸‹ä¸€è·³çš„èŠ‚ç‚¹IDè¢«å°è£…è¿›æ•°æ®ç»“æ„sendpkt_arg_t, å¹¶é€šè¿‡TCPè¿æ¥å‘é€ç»™SONè¿›ç¨‹. 
+// å‚æ•°son_connæ˜¯SIPè¿›ç¨‹å’ŒSONè¿›ç¨‹ä¹‹é—´çš„TCPè¿æ¥å¥—æ¥å­—æè¿°ç¬¦.
+// å½“é€šè¿‡SIPè¿›ç¨‹å’ŒSONè¿›ç¨‹ä¹‹é—´çš„TCPè¿æ¥å‘é€æ•°æ®ç»“æ„sendpkt_arg_tæ—¶, ä½¿ç”¨'!&'å’Œ'!#'ä½œä¸ºåˆ†éš”ç¬¦, æŒ‰ç…§'!& sendpkt_arg_tç»“æ„ !#'çš„é¡ºåºå‘é€.
+// å¦‚æœå‘é€æˆåŠŸ, è¿”å›1, å¦åˆ™è¿”å›-1.
+int son_sendpkt(int nextNodeID, sip_pkt_t* pkt, int son_conn) {
+	Assert(son_conn >= 0, "Invalid son_conn!");
+	Assert(pkt != NULL, "pkt is NULL!");
+	
+	sendpkt_arg_t arg;
+	memset(&arg, 0, sizeof(arg));
+	arg.nextNodeID = htonl(nextNodeID);
+	memcpy(&arg.pkt, pkt, sizeof(sip_pkt_t));
+
+	// send arg out, assuming header in network order
+	int len = sizeof(arg.nextNodeID) + sizeof(arg.pkt.header) + ntohs(arg.pkt.header.length);
+	if(tcp_send_data(son_conn, (char*)&arg, len) == -1) {
+		Log("Sending data error!");
+		return -1;
+	}
+
+	return 1;
 }
 
-// son_recvpkt()º¯ÊıÓÉSIP½ø³Ìµ÷ÓÃ, Æä×÷ÓÃÊÇ½ÓÊÕÀ´×ÔSON½ø³ÌµÄ±¨ÎÄ. 
-// ²ÎÊıson_connÊÇSIP½ø³ÌºÍSON½ø³ÌÖ®¼äTCPÁ¬½ÓµÄÌ×½Ó×ÖÃèÊö·û. ±¨ÎÄÍ¨¹ıSIP½ø³ÌºÍSON½ø³ÌÖ®¼äµÄTCPÁ¬½Ó·¢ËÍ, Ê¹ÓÃ·Ö¸ô·û!&ºÍ!#. 
-// ÎªÁË½ÓÊÕ±¨ÎÄ, Õâ¸öº¯ÊıÊ¹ÓÃÒ»¸ö¼òµ¥µÄÓĞÏŞ×´Ì¬»úFSM
-// PKTSTART1 -- Æğµã 
-// PKTSTART2 -- ½ÓÊÕµ½'!', ÆÚ´ı'&' 
-// PKTRECV -- ½ÓÊÕµ½'&', ¿ªÊ¼½ÓÊÕÊı¾İ
-// PKTSTOP1 -- ½ÓÊÕµ½'!', ÆÚ´ı'#'ÒÔ½áÊøÊı¾İµÄ½ÓÊÕ 
-// Èç¹û³É¹¦½ÓÊÕ±¨ÎÄ, ·µ»Ø1, ·ñÔò·µ»Ø-1.
-int son_recvpkt(sip_pkt_t* pkt, int son_conn)
-{
-  return 0;
+// son_recvpkt()å‡½æ•°ç”±SIPè¿›ç¨‹è°ƒç”¨, å…¶ä½œç”¨æ˜¯æ¥æ”¶æ¥è‡ªSONè¿›ç¨‹çš„æŠ¥æ–‡. 
+// å‚æ•°son_connæ˜¯SIPè¿›ç¨‹å’ŒSONè¿›ç¨‹ä¹‹é—´TCPè¿æ¥çš„å¥—æ¥å­—æè¿°ç¬¦. æŠ¥æ–‡é€šè¿‡SIPè¿›ç¨‹å’ŒSONè¿›ç¨‹ä¹‹é—´çš„TCPè¿æ¥å‘é€, ä½¿ç”¨åˆ†éš”ç¬¦!&å’Œ!#. 
+// ä¸ºäº†æ¥æ”¶æŠ¥æ–‡, è¿™ä¸ªå‡½æ•°ä½¿ç”¨ä¸€ä¸ªç®€å•çš„æœ‰é™çŠ¶æ€æœºFSM
+// PKTSTART1 -- èµ·ç‚¹ 
+// PKTSTART2 -- æ¥æ”¶åˆ°'!', æœŸå¾…'&' 
+// PKTRECV -- æ¥æ”¶åˆ°'&', å¼€å§‹æ¥æ”¶æ•°æ®
+// PKTSTOP1 -- æ¥æ”¶åˆ°'!', æœŸå¾…'#'ä»¥ç»“æŸæ•°æ®çš„æ¥æ”¶ 
+// å¦‚æœæˆåŠŸæ¥æ”¶æŠ¥æ–‡, è¿”å›1, å¦åˆ™è¿”å›-1.
+int son_recvpkt(sip_pkt_t* pkt, int son_conn) {
+	Assert(son_conn >= 0, "Invalid son_conn!");
+	Assert(pkt != NULL, "pkt is NULL!");
+
+	int recv_len = tcp_recv_data(son_conn, (char*)pkt, sizeof(sip_pkt_t));
+
+	if(recv_len == -1) {
+		Log("Can't receive data!");
+		return -1;
+	} else {
+		Assert(recv_len == (sizeof(pkt->header) + (ntohs(pkt->header.length))), "Unmatch received length.");
+		return 1;
+	}
 }
 
-// Õâ¸öº¯ÊıÓÉSON½ø³Ìµ÷ÓÃ, Æä×÷ÓÃÊÇ½ÓÊÕÊı¾İ½á¹¹sendpkt_arg_t.
-// ±¨ÎÄºÍÏÂÒ»ÌøµÄ½ÚµãID±»·â×°½øsendpkt_arg_t½á¹¹.
-// ²ÎÊısip_connÊÇÔÚSIP½ø³ÌºÍSON½ø³ÌÖ®¼äµÄTCPÁ¬½ÓµÄÌ×½Ó×ÖÃèÊö·û. 
-// sendpkt_arg_t½á¹¹Í¨¹ıSIP½ø³ÌºÍSON½ø³ÌÖ®¼äµÄTCPÁ¬½Ó·¢ËÍ, Ê¹ÓÃ·Ö¸ô·û!&ºÍ!#. 
-// ÎªÁË½ÓÊÕ±¨ÎÄ, Õâ¸öº¯ÊıÊ¹ÓÃÒ»¸ö¼òµ¥µÄÓĞÏŞ×´Ì¬»úFSM
-// PKTSTART1 -- Æğµã 
-// PKTSTART2 -- ½ÓÊÕµ½'!', ÆÚ´ı'&' 
-// PKTRECV -- ½ÓÊÕµ½'&', ¿ªÊ¼½ÓÊÕÊı¾İ
-// PKTSTOP1 -- ½ÓÊÕµ½'!', ÆÚ´ı'#'ÒÔ½áÊøÊı¾İµÄ½ÓÊÕ
-// Èç¹û³É¹¦½ÓÊÕsendpkt_arg_t½á¹¹, ·µ»Ø1, ·ñÔò·µ»Ø-1.
-int getpktToSend(sip_pkt_t* pkt, int* nextNode,int sip_conn)
-{
-  return 0;
+// è¿™ä¸ªå‡½æ•°ç”±SONè¿›ç¨‹è°ƒç”¨, å…¶ä½œç”¨æ˜¯æ¥æ”¶æ•°æ®ç»“æ„sendpkt_arg_t.
+// æŠ¥æ–‡å’Œä¸‹ä¸€è·³çš„èŠ‚ç‚¹IDè¢«å°è£…è¿›sendpkt_arg_tç»“æ„.
+// å‚æ•°sip_connæ˜¯åœ¨SIPè¿›ç¨‹å’ŒSONè¿›ç¨‹ä¹‹é—´çš„TCPè¿æ¥çš„å¥—æ¥å­—æè¿°ç¬¦. 
+// sendpkt_arg_tç»“æ„é€šè¿‡SIPè¿›ç¨‹å’ŒSONè¿›ç¨‹ä¹‹é—´çš„TCPè¿æ¥å‘é€, ä½¿ç”¨åˆ†éš”ç¬¦!&å’Œ!#. 
+// ä¸ºäº†æ¥æ”¶æŠ¥æ–‡, è¿™ä¸ªå‡½æ•°ä½¿ç”¨ä¸€ä¸ªç®€å•çš„æœ‰é™çŠ¶æ€æœºFSM
+// PKTSTART1 -- èµ·ç‚¹ 
+// PKTSTART2 -- æ¥æ”¶åˆ°'!', æœŸå¾…'&' 
+// PKTRECV -- æ¥æ”¶åˆ°'&', å¼€å§‹æ¥æ”¶æ•°æ®
+// PKTSTOP1 -- æ¥æ”¶åˆ°'!', æœŸå¾…'#'ä»¥ç»“æŸæ•°æ®çš„æ¥æ”¶
+// å¦‚æœæˆåŠŸæ¥æ”¶sendpkt_arg_tç»“æ„, è¿”å›1, å¦åˆ™è¿”å›-1.
+int getpktToSend(sip_pkt_t* pkt, int* nextNode, int sip_conn) {
+	Assert(sip_conn >= 0, "Invalid sip_conn!");
+	Assert(pkt != NULL, "pkt is NULL!");
+	Assert(nextNode != NULL, "nextNode is NULL!");
+
+	sendpkt_arg_t arg;
+	memset(&arg, 0, sizeof(arg));
+
+	int recv_len = tcp_recv_data(sip_conn, (char*)&arg, sizeof(arg));
+
+	if(recv_len == -1) {
+		Log("Can't receive data!");
+		return -1;
+	} else {
+		Assert(recv_len == (sizeof(arg.nextNodeID) + sizeof(arg.pkt.header) + ntohs(arg.pkt.header.length)), "Unmatched recv len!");
+		*nextNode = ntohl(arg.nextNodeID);
+		memcpy(pkt, &arg.pkt, sizeof(sip_pkt_t));
+
+		return 1;
+	}
 }
 
-// forwardpktToSIP()º¯ÊıÊÇÔÚSON½ø³Ì½ÓÊÕµ½À´×ÔÖØµşÍøÂçÖĞÆäÁÚ¾ÓµÄ±¨ÎÄºó±»µ÷ÓÃµÄ. 
-// SON½ø³Ìµ÷ÓÃÕâ¸öº¯Êı½«±¨ÎÄ×ª·¢¸øSIP½ø³Ì. 
-// ²ÎÊısip_connÊÇSIP½ø³ÌºÍSON½ø³ÌÖ®¼äµÄTCPÁ¬½ÓµÄÌ×½Ó×ÖÃèÊö·û. 
-// ±¨ÎÄÍ¨¹ıSIP½ø³ÌºÍSON½ø³ÌÖ®¼äµÄTCPÁ¬½Ó·¢ËÍ, Ê¹ÓÃ·Ö¸ô·û!&ºÍ!#, °´ÕÕ'!& ±¨ÎÄ !#'µÄË³Ğò·¢ËÍ. 
-// Èç¹û±¨ÎÄ·¢ËÍ³É¹¦, ·µ»Ø1, ·ñÔò·µ»Ø-1.
-int forwardpktToSIP(sip_pkt_t* pkt, int sip_conn)
-{
-  return 0;
+// forwardpktToSIP()å‡½æ•°æ˜¯åœ¨SONè¿›ç¨‹æ¥æ”¶åˆ°æ¥è‡ªé‡å ç½‘ç»œä¸­å…¶é‚»å±…çš„æŠ¥æ–‡åè¢«è°ƒç”¨çš„. 
+// SONè¿›ç¨‹è°ƒç”¨è¿™ä¸ªå‡½æ•°å°†æŠ¥æ–‡è½¬å‘ç»™SIPè¿›ç¨‹. 
+// å‚æ•°sip_connæ˜¯SIPè¿›ç¨‹å’ŒSONè¿›ç¨‹ä¹‹é—´çš„TCPè¿æ¥çš„å¥—æ¥å­—æè¿°ç¬¦. 
+// æŠ¥æ–‡é€šè¿‡SIPè¿›ç¨‹å’ŒSONè¿›ç¨‹ä¹‹é—´çš„TCPè¿æ¥å‘é€, ä½¿ç”¨åˆ†éš”ç¬¦!&å’Œ!#, æŒ‰ç…§'!& æŠ¥æ–‡ !#'çš„é¡ºåºå‘é€. 
+// å¦‚æœæŠ¥æ–‡å‘é€æˆåŠŸ, è¿”å›1, å¦åˆ™è¿”å›-1.
+int forwardpktToSIP(sip_pkt_t* pkt, int sip_conn) {
+	Assert(sip_conn >= 0, "Invalid sip_conn!");
+	Assert(pkt != NULL, "pkt is NULL!");
+
+	// send arg out, assuming header in network order
+	int len = sizeof(pkt->header) + ntohs(pkt->header.length);
+	if(tcp_send_data(sip_conn, (char*)pkt, len) == -1) {
+		Log("Sending data error!");
+		return -1;
+	}
+
+	return 1;
 }
 
-// sendpkt()º¯ÊıÓÉSON½ø³Ìµ÷ÓÃ, Æä×÷ÓÃÊÇ½«½ÓÊÕ×ÔSIP½ø³ÌµÄ±¨ÎÄ·¢ËÍ¸øÏÂÒ»Ìø.
-// ²ÎÊıconnÊÇµ½ÏÂÒ»Ìø½ÚµãµÄTCPÁ¬½ÓµÄÌ×½Ó×ÖÃèÊö·û.
-// ±¨ÎÄÍ¨¹ıSON½ø³ÌºÍÆäÁÚ¾Ó½ÚµãÖ®¼äµÄTCPÁ¬½Ó·¢ËÍ, Ê¹ÓÃ·Ö¸ô·û!&ºÍ!#, °´ÕÕ'!& ±¨ÎÄ !#'µÄË³Ğò·¢ËÍ. 
-// Èç¹û±¨ÎÄ·¢ËÍ³É¹¦, ·µ»Ø1, ·ñÔò·µ»Ø-1.
-int sendpkt(sip_pkt_t* pkt, int conn)
-{
-  return 0;
+// sendpkt()å‡½æ•°ç”±SONè¿›ç¨‹è°ƒç”¨, å…¶ä½œç”¨æ˜¯å°†æ¥æ”¶è‡ªSIPè¿›ç¨‹çš„æŠ¥æ–‡å‘é€ç»™ä¸‹ä¸€è·³.
+// å‚æ•°connæ˜¯åˆ°ä¸‹ä¸€è·³èŠ‚ç‚¹çš„TCPè¿æ¥çš„å¥—æ¥å­—æè¿°ç¬¦.
+// æŠ¥æ–‡é€šè¿‡SONè¿›ç¨‹å’Œå…¶é‚»å±…èŠ‚ç‚¹ä¹‹é—´çš„TCPè¿æ¥å‘é€, ä½¿ç”¨åˆ†éš”ç¬¦!&å’Œ!#, æŒ‰ç…§'!& æŠ¥æ–‡ !#'çš„é¡ºåºå‘é€. 
+// å¦‚æœæŠ¥æ–‡å‘é€æˆåŠŸ, è¿”å›1, å¦åˆ™è¿”å›-1.
+int sendpkt(sip_pkt_t* pkt, int conn) {
+	Assert(conn >= 0, "Invalid conn!");
+	Assert(pkt != NULL, "pkt is NULL!");
+
+	// send arg out, assuming header in network order
+	int len = sizeof(pkt->header) + ntohs(pkt->header.length);
+	if(tcp_send_data(conn, (char*)pkt, len) == -1) {
+		Log("Sending data error!");
+		return -1;
+	}
+
+	return 1;
 }
 
-// recvpkt()º¯ÊıÓÉSON½ø³Ìµ÷ÓÃ, Æä×÷ÓÃÊÇ½ÓÊÕÀ´×ÔÖØµşÍøÂçÖĞÆäÁÚ¾ÓµÄ±¨ÎÄ.
-// ²ÎÊıconnÊÇµ½ÆäÁÚ¾ÓµÄTCPÁ¬½ÓµÄÌ×½Ó×ÖÃèÊö·û.
-// ±¨ÎÄÍ¨¹ıSON½ø³ÌºÍÆäÁÚ¾ÓÖ®¼äµÄTCPÁ¬½Ó·¢ËÍ, Ê¹ÓÃ·Ö¸ô·û!&ºÍ!#. 
-// ÎªÁË½ÓÊÕ±¨ÎÄ, Õâ¸öº¯ÊıÊ¹ÓÃÒ»¸ö¼òµ¥µÄÓĞÏŞ×´Ì¬»úFSM
-// PKTSTART1 -- Æğµã 
-// PKTSTART2 -- ½ÓÊÕµ½'!', ÆÚ´ı'&' 
-// PKTRECV -- ½ÓÊÕµ½'&', ¿ªÊ¼½ÓÊÕÊı¾İ
-// PKTSTOP1 -- ½ÓÊÕµ½'!', ÆÚ´ı'#'ÒÔ½áÊøÊı¾İµÄ½ÓÊÕ 
-// Èç¹û³É¹¦½ÓÊÕ±¨ÎÄ, ·µ»Ø1, ·ñÔò·µ»Ø-1.
-int recvpkt(sip_pkt_t* pkt, int conn)
-{
-  return 0;
+// recvpkt()å‡½æ•°ç”±SONè¿›ç¨‹è°ƒç”¨, å…¶ä½œç”¨æ˜¯æ¥æ”¶æ¥è‡ªé‡å ç½‘ç»œä¸­å…¶é‚»å±…çš„æŠ¥æ–‡.
+// å‚æ•°connæ˜¯åˆ°å…¶é‚»å±…çš„TCPè¿æ¥çš„å¥—æ¥å­—æè¿°ç¬¦.
+// æŠ¥æ–‡é€šè¿‡SONè¿›ç¨‹å’Œå…¶é‚»å±…ä¹‹é—´çš„TCPè¿æ¥å‘é€, ä½¿ç”¨åˆ†éš”ç¬¦!&å’Œ!#. 
+// ä¸ºäº†æ¥æ”¶æŠ¥æ–‡, è¿™ä¸ªå‡½æ•°ä½¿ç”¨ä¸€ä¸ªç®€å•çš„æœ‰é™çŠ¶æ€æœºFSM
+// PKTSTART1 -- èµ·ç‚¹ 
+// PKTSTART2 -- æ¥æ”¶åˆ°'!', æœŸå¾…'&' 
+// PKTRECV -- æ¥æ”¶åˆ°'&', å¼€å§‹æ¥æ”¶æ•°æ®
+// PKTSTOP1 -- æ¥æ”¶åˆ°'!', æœŸå¾…'#'ä»¥ç»“æŸæ•°æ®çš„æ¥æ”¶ 
+// å¦‚æœæˆåŠŸæ¥æ”¶æŠ¥æ–‡, è¿”å›1, å¦åˆ™è¿”å›-1.
+int recvpkt(sip_pkt_t* pkt, int conn) {
+	Assert(conn >= 0, "Invalid conn!");
+	Assert(pkt != NULL, "pkt is NULL!");
+
+	int recv_len = tcp_recv_data(conn, (char*)pkt, sizeof(sip_pkt_t));
+
+	if(recv_len == -1) {
+		Log("Can't receive data!");
+		return -1;
+	} else {
+		Assert(recv_len == (sizeof(pkt->header) + ntohs(pkt->header.length)), "Unmatched recv len!");
+		return 1;
+	}
 }
+
