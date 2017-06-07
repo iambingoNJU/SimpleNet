@@ -30,7 +30,7 @@ int getTime();
 
 tcb_list_item tcb_list[MAX_TRANSPORT_CONNECTIONS];
 unsigned int gSeqNum = 0;
-int sip_sockfd;
+int stcp2sip_conn;
 
 // stcp客户端初始化
 //
@@ -47,7 +47,7 @@ void stcp_client_init(int conn) {
 	}
 
 	Log("STCP client initialized.");
-	sip_sockfd = conn;
+	stcp2sip_conn = conn;
 
 	pthread_t tid;
 	pthread_create(&tid, NULL, seghandler, NULL);
@@ -103,6 +103,7 @@ int stcp_client_connect(int sockfd, int nodeID, unsigned int server_port) {
 	assert(tcb_list[sockfd].used == 1);
 	assert(tcb_list[sockfd].tcb.state == CLOSED);
 
+	tcb_list[sockfd].tcb.server_nodeID = nodeID;
 	tcb_list[sockfd].tcb.server_portNum = server_port;
 
 	seg_t seg;
@@ -113,7 +114,7 @@ int stcp_client_connect(int sockfd, int nodeID, unsigned int server_port) {
 
 	int n = SYN_MAX_RETRY;
 	while(n --> 0) {	// interesting --> operator
-		if(sip_sendseg(sip_sockfd, &seg) == 1) {
+		if(sip_sendseg(stcp2sip_conn, &seg) == 1) {
 			Log("STCP client socket %d sending SYN %d!", sockfd, SYN_MAX_RETRY - n);
 		} else {
 			Log("STCP client socket %d sending SYN %d failed!", sockfd, SYN_MAX_RETRY - n);
@@ -202,7 +203,7 @@ int stcp_client_disconnect(int sockfd) {
 
 	int n = FIN_MAX_RETRY;
 	while(n --> 0) {
-		if(sip_sendseg(sip_sockfd, &seg) == 1) {
+		if(sip_sendseg(stcp2sip_conn, &seg) == 1) {
 			Log("STCP client %d sending FIN %d!", sockfd, FIN_MAX_RETRY - n);
 		} else {
 			Log("STCP client %d sending FIN %d failed!", sockfd, FIN_MAX_RETRY - n);
@@ -279,7 +280,7 @@ void *seghandler(void* arg) {
 	int sfd;
 	seg_t seg;
 	while(1) {
-		int ret = sip_recvseg(sip_sockfd, &seg);
+		int ret = sip_recvseg(stcp2sip_conn, &seg);
 
 		if(ret == -1) {
 			Log("sip receive segment failed, exit!");
@@ -353,7 +354,7 @@ void* sendBuf_timer(void* clienttcb) {
 		if(getTime() - ptcb->tcb.sendBufHead->sentTime > DATA_TIMEOUT / 1000) {
 			Log("STCP client send buffer timeout, resending...");
 			for(segBuf_t *sb = ptcb->tcb.sendBufHead; sb && (sb != ptcb->tcb.sendBufunSent); sb = sb->next) {
-				if(sip_sendseg(sip_sockfd, &sb->seg) == 1) {
+				if(sip_sendseg(stcp2sip_conn, &sb->seg) == 1) {
 					Log("Resended segment sequence number: %d", ntohl(sb->seg.header.seq_num));
 					sb->sentTime = getTime();
 				} else {
@@ -382,7 +383,7 @@ void sendbuf_send(int sockfd) {
 	while((tcb_list[sockfd].tcb.sendBufunSent != NULL) && 
 			(tcb_list[sockfd].tcb.unAck_segNum < GBN_WINDOW)) {
 
-		if(sip_sendseg(sip_sockfd, &(tcb_list[sockfd].tcb.sendBufunSent->seg)) == 1) {
+		if(sip_sendseg(stcp2sip_conn, &(tcb_list[sockfd].tcb.sendBufunSent->seg)) == 1) {
 			Log("Sending segment out. seq_num = %d.", ntohl(tcb_list[sockfd].tcb.sendBufunSent->seg.header.seq_num));
 		} else {
 			Log("Sending segment failed.");

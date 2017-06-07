@@ -127,8 +127,25 @@ void sip_stop() {
 //接收的段被封装进数据报(一个段在一个数据报中), 然后使用son_sendpkt发送该报文到下一跳. 下一跳节点ID提取自路由表.
 //当本地STCP进程断开连接时, 这个函数等待下一个STCP进程的连接.
 void waitSTCP() {
-	//你需要编写这里的代码.
-  return;
+	int listenfd = socket(AF_INET, SOCK_STREAM, 0);
+	Assert(listenfd >= 0, "Creating listenfd error!");
+
+	struct sockaddr_in servaddr;
+	memset(&servaddr, 0, sizeof(servaddr));
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	servaddr.sin_port = htons(SIP_PORT);
+
+	bind(listenfd, (struct sockaddr*)&servaddr, sizeof(struct sockaddr));
+
+	listen(listenfd, 1);
+
+	socklen_t clilen;
+	struct sockaddr cliaddr;
+	stcp_conn = accept(listenfd, &cliaddr, &clilen);
+	Log("[SIP] STCP connected SIP!");
+
+	sendseg_arg_t seg_arg;
 }
 
 int main(int argc, char *argv[]) {

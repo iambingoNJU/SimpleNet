@@ -36,18 +36,31 @@
 //在发送字符串后, 等待5秒, 然后关闭连接.
 #define WAITTIME 5
 
+
 //这个函数连接到本地SIP进程的端口SIP_PORT. 如果TCP连接失败, 返回-1. 连接成功, 返回TCP套接字描述符, STCP将使用该描述符发送段.
 int connectToSIP() {
+	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	assert(sockfd > 0);
 
-	//你需要编写这里的代码.
-	
+	struct sockaddr_in servaddr;
+	memset(&servaddr, 0, sizeof(servaddr));
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+	servaddr.sin_port = htons(SIP_PORT);
+
+	if(connect(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) == -1) {
+		Log("STCP connects SIP failed!");
+		return -1;
+	} else {
+		Log("STCP connects SIP successed!");
+		return sockfd;
+	}
 }
 
 //这个函数断开到本地SIP进程的TCP连接. 
 void disconnectToSIP(int sip_conn) {
-
-	//你需要编写这里的代码.
-	
+	close(sip_conn);
+	Log("STCP disconnects with SIP.");
 }
 
 int main() {

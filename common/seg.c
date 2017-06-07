@@ -17,9 +17,8 @@
 
 #include "seg.h"
 #include "debug.h"
+#include "lib-socket.h"
 
-int sendn(int fd, char *data, int len);
-int rcvn(int fd, char *bp, int len);
 
 static pthread_mutex_t conn_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -46,48 +45,23 @@ static pthread_mutex_t conn_mutex = PTHREAD_MUTEX_INITIALIZER;
 //
 
 int sip_sendseg(int connection, seg_t* segPtr) {
-	if(connection < 0) {
-		Log("Invalid connection!");
-		return -1;
-	}
+	Assert(connection >= 0, "Invalid connection!");
+	Assert(segPtr != NULL, "SegPtr in NULL!");
 
-	if(segPtr == NULL) {
-		Log("SegPtr is NULL!");
-		return -1;
-	}
+	int ret = 1;
 
 	// there are muliple connections at the same time, so we should make sure only one can send data at one time
 	pthread_mutex_lock(&conn_mutex);
 
-	// send "!&"
-	if(sendn(connection, "!&", 2) != 2) {
-		Log("Sending leading '!&' failed!");
-		return -1;
-	}
-
-	// send tcp header, assume segPtr->header is network order.
-	if(sendn(connection, (char*)&(segPtr->header), sizeof(stcp_hdr_t)) != sizeof(stcp_hdr_t)) {
-		Log("Sending stcp header failed!");
-		return -1;
-	}
-
-	// send data
-	if((segPtr->header).type == htons(DATA)) {
-		if(sendn(connection, (char*)&(segPtr->data), segPtr->data_len) != segPtr->data_len) {
-			Log("Sending stcp data failed!");
-			return -1;
-		}
-	}
-
-	// send "!#"
-	if(sendn(connection, "!#", 2) != 2) {
-		Log("Sending tailing '!#' failed!");
-		return -1;
+	int len = sizeof(stcp_hdr_t) + segPtr->data_len;
+	if(tcp_send_data(connection, (char*)segPtr, len) != -1) {
+		Log("Sending segment error!");
+		ret = -1;
 	}
 
 	pthread_mutex_unlock(&conn_mutex);
 
-	return 1;
+	return ret;
 }
 
 // 通过重叠网络(在本实验中，是一个TCP连接)接收STCP段. 我们建议你使用recv()一次接收一个字节.
@@ -270,51 +244,6 @@ int checkchecksum(seg_t* segment){
 	}
 }
 
-
-// send exactly n bytes
-int sendn(int fd, char *data, int len) {
-	int rc;
-	int cnt = len;
-
-	while(cnt > 0) {
-		rc = send(fd, data, cnt, 0);
-		if(rc < 0) {
-			if(errno == EINTR)
-				continue;
-			return -1;
-		}
-
-		if(rc == 0)
-			return len - cnt;
-		data += rc;
-		cnt -= rc;
-	}
-
-	return len;
-}
-
-// receive exactly n bytes
-int rcvn(int fd, char *bp, int len) {
-	int cnt;
-	int rc;
-
-	cnt = len;
-	while(cnt > 0) {
-		rc = recv(fd, bp, cnt, 0);
-		if(rc < 0) {
-			if(errno == EINTR)		/* interrupted? */
-				continue;			/* restart the read */
-			return -1;				/* return error */
-		}
-
-		if(rc == 0)					/* EOF? */
-			return len - cnt;
-		bp += rc;
-		cnt -= rc;
-	}
-
-	return len;
-}
 
 //used to change host order to network order
 void stcp_hdr_to_network_order(stcp_hdr_t *phdr) {
