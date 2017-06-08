@@ -13,7 +13,7 @@
 #include <sys/socket.h> 
 #include <sys/types.h>    
 #include <sys/ioctl.h>
-#include <net/if.h>
+//#include <net/if.h>
 #include <linux/if.h>   
 #include "../son/neighbortable.h"
 #include "topology.h"
