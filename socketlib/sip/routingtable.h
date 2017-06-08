@@ -8,6 +8,8 @@
 #ifndef ROUTINGTABLE_H
 #define ROUTINGTABLE_H
 
+#include "../common/constants.h"
+
 //routingtable_entry_t是包含在路由表中的路由条目.
 typedef struct routingtable_entry {
 	int destNodeID;		//目标节点ID
