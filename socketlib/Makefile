@@ -31,7 +31,7 @@ $(SON): $(SON_OBJ) $(COMMON_OBJ)
 $(SIP): $(SIP_OBJ) $(COMMON_OBJ)
 	$(CC) $(CFLAGS) $^ -o $@
 
-$(STCP_ARCH): $(STCP_OBJ)
+$(STCP_ARCH): $(STCP_OBJ) $(COMMON_OBJ)
 	ar -r $@ $^
  	
 

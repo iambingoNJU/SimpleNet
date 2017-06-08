@@ -22,8 +22,7 @@
 #include <stdio.h>
 #include <time.h>
 
-#include "../common/constants.h"
-#include "stcp_server.h"
+#include "../socketlib/socketlib.h"
 
 //创建一个连接, 使用客户端端口号87和服务器端口号88. 
 #define CLIENTPORT1 87

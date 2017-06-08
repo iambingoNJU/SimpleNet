@@ -21,9 +21,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "../common/constants.h"
-#include "../topology/topology.h"
-#include "stcp_client.h"
+#include "../socketlib/socketlib.h"
 
 //创建两个连接, 一个使用客户端端口号87和服务器端口号88. 另一个使用客户端端口号89和服务器端口号90.
 #define CLIENTPORT1 87

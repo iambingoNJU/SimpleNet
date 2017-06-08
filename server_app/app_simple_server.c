@@ -20,8 +20,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <time.h>
-#include "../common/constants.h"
-#include "stcp_server.h"
+#include "../socketlib/socketlib.h"
 
 //创建两个连接, 一个使用客户端端口号87和服务器端口号88. 另一个使用客户端端口号89和服务器端口号90.
 #define CLIENTPORT1 87
@@ -35,7 +34,7 @@
 int connectToSIP() {
 
 	//你需要编写这里的代码.
-	
+	return 0;
 }
 
 //这个函数断开到本地SIP进程的TCP连接. 
