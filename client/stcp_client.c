@@ -114,7 +114,7 @@ int stcp_client_connect(int sockfd, int nodeID, unsigned int server_port) {
 
 	int n = SYN_MAX_RETRY;
 	while(n --> 0) {	// interesting --> operator
-		if(sip_sendseg(stcp2sip_conn, &seg) == 1) {
+		if(sip_sendseg(stcp2sip_conn, tcb_list[sockfd].tcb.server_nodeID, &seg) == 1) {
 			Log("STCP client socket %d sending SYN %d!", sockfd, SYN_MAX_RETRY - n);
 		} else {
 			Log("STCP client socket %d sending SYN %d failed!", sockfd, SYN_MAX_RETRY - n);
@@ -203,7 +203,7 @@ int stcp_client_disconnect(int sockfd) {
 
 	int n = FIN_MAX_RETRY;
 	while(n --> 0) {
-		if(sip_sendseg(stcp2sip_conn, &seg) == 1) {
+		if(sip_sendseg(stcp2sip_conn, tcb_list[sockfd].tcb.server_nodeID, &seg) == 1) {
 			Log("STCP client %d sending FIN %d!", sockfd, FIN_MAX_RETRY - n);
 		} else {
 			Log("STCP client %d sending FIN %d failed!", sockfd, FIN_MAX_RETRY - n);
@@ -278,9 +278,10 @@ void *seghandler(void* arg) {
 	Log("Issuing seghandler.");
 
 	int sfd;
+	int src_nodeID;
 	seg_t seg;
 	while(1) {
-		int ret = sip_recvseg(stcp2sip_conn, &seg);
+		int ret = sip_recvseg(stcp2sip_conn, &src_nodeID, &seg);
 
 		if(ret == -1) {
 			Log("sip receive segment failed, exit!");
@@ -354,7 +355,7 @@ void* sendBuf_timer(void* clienttcb) {
 		if(getTime() - ptcb->tcb.sendBufHead->sentTime > DATA_TIMEOUT / 1000) {
 			Log("STCP client send buffer timeout, resending...");
 			for(segBuf_t *sb = ptcb->tcb.sendBufHead; sb && (sb != ptcb->tcb.sendBufunSent); sb = sb->next) {
-				if(sip_sendseg(stcp2sip_conn, &sb->seg) == 1) {
+				if(sip_sendseg(stcp2sip_conn, ptcb->tcb.server_nodeID, &sb->seg) == 1) {
 					Log("Resended segment sequence number: %d", ntohl(sb->seg.header.seq_num));
 					sb->sentTime = getTime();
 				} else {
@@ -383,7 +384,7 @@ void sendbuf_send(int sockfd) {
 	while((tcb_list[sockfd].tcb.sendBufunSent != NULL) && 
 			(tcb_list[sockfd].tcb.unAck_segNum < GBN_WINDOW)) {
 
-		if(sip_sendseg(stcp2sip_conn, &(tcb_list[sockfd].tcb.sendBufunSent->seg)) == 1) {
+		if(sip_sendseg(stcp2sip_conn, tcb_list[sockfd].tcb.server_nodeID, &(tcb_list[sockfd].tcb.sendBufunSent->seg)) == 1) {
 			Log("Sending segment out. seq_num = %d.", ntohl(tcb_list[sockfd].tcb.sendBufunSent->seg.header.seq_num));
 		} else {
 			Log("Sending segment failed.");
