@@ -102,6 +102,7 @@ int routingtable_getnextnode(routingtable_t* routingtable, int destNodeID) {
 void routingtable_print(routingtable_t* routingtable) {
 	int cnt = 0;
 	routingtable_entry_t *rt_hdr;
+	printf("routingtable content begins:\n");
 	printf("%5s - %10s - %10s\n", "ENTRY", "destNodeID", "nextNodeID");
 	for(int i = 0; i < MAX_ROUTINGTABLE_SLOTS; i ++) {
 		rt_hdr = routingtable->hash[i];
@@ -110,4 +111,5 @@ void routingtable_print(routingtable_t* routingtable) {
 			rt_hdr = rt_hdr->next;
 		}
 	}
+	printf("routingtable content ends.\n\n");
 }

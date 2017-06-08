@@ -8,7 +8,7 @@
 #define TOPOLOGY_H
 #include <netdb.h>
 
-#define TopologyDataPath "./topology/topology.dat"
+#define TopologyDataPath "/home/bingo/protocol/lab08/socketlib/topology/topology.dat"
 // #define Local_IP "192.168.229.153"
 #define MAXNAMELEN 50
 #define IPLen 20

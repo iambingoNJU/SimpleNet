@@ -66,9 +66,11 @@ unsigned int nbrcosttable_getcost(nbr_cost_entry_t* nct, int nodeID) {
 //这个函数打印邻居代价表的内容.
 void nbrcosttable_print(nbr_cost_entry_t* nct) {
 	int cnt = 0;
+	printf("neighbour cost table content begins:\n");
 	printf("%5s - %6s - %4s\n", "ENTRY", "nodeID", "cost");
 	while(nct != NULL) {
 		printf("%5d - %6d - %4d\n", ++cnt, nct->nodeID, nct->cost);
 		nct = nct->next;
 	}
+	printf("neighbour cost table content ends.\n\n");
 }

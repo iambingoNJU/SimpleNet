@@ -122,6 +122,7 @@ void dvtable_print(dv_t* dvtable) {
 	int nr_node = topology_getNodeNum();
 	int *node_arr = topology_getNodeArray();
 
+	printf("distance vector table content begins:\n");
 	printf("%8s  ", "");
 	for(int i = 0; i < nr_node; i ++) {
 		printf("%8d  ", node_arr[i]);
@@ -135,6 +136,7 @@ void dvtable_print(dv_t* dvtable) {
 		}
 		printf("\n");
 	}
+	printf("distance vector table content ends.\n\n");
 
 	free(node_arr);
 }
