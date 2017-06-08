@@ -12,6 +12,7 @@
 typedef struct neighborcostentry {
 	unsigned int nodeID;	//邻居的节点ID
 	unsigned int cost;	    //到该邻居的直接链路代价
+	struct neighborcostentry *next;
 } nbr_cost_entry_t;
 
 //这个函数动态创建邻居代价表并使用邻居节点ID和直接链路代价初始化该表.
