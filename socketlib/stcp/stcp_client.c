@@ -278,10 +278,10 @@ void *seghandler(void* arg) {
 	Log("Issuing seghandler.");
 
 	int sfd;
+	int src_nodeID;
 	seg_t seg;
 	while(1) {
-		int srcNode;
-		int ret = sip_recvseg(stcp2sip_conn, &srcNode, &seg);
+		int ret = sip_recvseg(stcp2sip_conn, &src_nodeID, &seg);
 
 		if(ret == -1) {
 			Log("sip receive segment failed, exit!");
