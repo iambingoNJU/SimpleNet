@@ -25,7 +25,12 @@ routingtable_t* routingtable_create() {
 		prt->hash[i] = NULL;
 	}
 
-	// TODO: add neighbour routing entry
+	int nr_nbr = topology_getNbrNum();
+	int *nbr_arr = topology_getNbrArray();
+	for(int i = 0; i < nr_nbr; i ++) {
+		routingtable_setnextnode(prt, nbr_arr[i], nbr_arr[i]);
+	}
+	free(nbr_arr);
 
 	Log("Routing table was created.");
 	return prt;

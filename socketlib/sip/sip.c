@@ -52,6 +52,14 @@ void sip_hdr_to_network_order(sip_hdr_t *piphdr) {
 	piphdr->type = htons(piphdr->type);
 	piphdr->length = htons(piphdr->length);
 }
+
+void sip_hdr_to_host_order(sip_hdr_t *piphdr) {
+	piphdr->src_nodeID = ntohl(piphdr->src_nodeID);
+	piphdr->dest_nodeID = ntohl(piphdr->dest_nodeID);
+	piphdr->type = ntohs(piphdr->type);
+	piphdr->length = ntohs(piphdr->length);
+}
+
 /**************************************************************/
 //实现SIP的函数
 /**************************************************************/
@@ -83,11 +91,20 @@ void* routeupdate_daemon(void* arg) {
 	sip_pkt_t pkt;
 	memset(&pkt, 0, sizeof(pkt));
 
-	topology_init();
+	pkt_routeupdate_t update_msg;
+	memset(&update_msg, 0, sizeof(update_msg));
+	update_msg.entryNum = topology_getNodeNum();
+	Assert(dv[0].nodeID == topology_getMyNodeID(), "dv item 0 should be myself DV!");
+	for(int i = 0; i < update_msg.entryNum; i ++) {
+		update_msg.entry[i].nodeID = dv[0].dvEntry[i].nodeID;
+		update_msg.entry[i].cost = dv[0].dvEntry[i].cost;
+	}
+
 	pkt.header.src_nodeID = topology_getMyNodeID();
 	pkt.header.dest_nodeID = BROADCAST_NODEID;
 	pkt.header.type = ROUTE_UPDATE;
-	pkt.header.length = 0;
+	pkt.header.length = sizeof(update_msg.entryNum) + update_msg.entryNum * sizeof(update_msg.entry[0]);
+	memcpy(pkt.data, (char*)&update_msg, pkt.header.length);
 
 	sip_hdr_to_network_order(&pkt.header);
 
@@ -107,9 +124,61 @@ void* routeupdate_daemon(void* arg) {
 //就根据路由表转发报文给下一跳.如果报文是路由更新报文,就更新距离矢量表和路由表.
 void* pkthandler(void* arg) {
 	sip_pkt_t pkt;
+	int myNodeID = topology_getMyNodeID();
 
-	while(son_recvpkt(&pkt,son_conn) > 0) {
-		printf("Routing: received a packet from neighbor %d\n", ntohl(pkt.header.src_nodeID));
+	while(1) {
+		if(son_recvpkt(&pkt, son_conn) != 1) {
+			Log("[SIP] receiving son packet failed.");
+			pthread_exit(NULL);
+		}
+
+		sip_hdr_to_host_order(&(pkt.header));
+
+		if(pkt.header.dest_nodeID == BROADCAST_NODEID) {
+			Assert(pkt.header.type == ROUTE_UPDATE, "Strange broadcast pakcet, but not ROUTE_UPDATE packet.");
+			Log("SIP receiving route update packet.");
+			// TODO: update dvtable and routing table
+			pkt_routeupdate_t *update_msg = (pkt_routeupdate_t*)pkt.data;
+			int srcNode = pkt.header.src_nodeID;
+			// update dvtable item src_nodeID
+			for(int i = 0; i < update_msg->entryNum; i ++) {
+				dvtable_setcost(dv, srcNode, update_msg->entry[i].nodeID, update_msg->entry[i].cost); 
+			}
+			// update all dvtable item
+			int nr_nbr = topology_getNbrNum();
+			int nr_node = topology_getNodeNum();
+			int idx = dvtable_getidx(dv, srcNode);
+			for(int i = 0; i <= nr_nbr; i ++) {
+				for(int j = 0; j < nr_node; j ++) {
+					if(dv[i].dvEntry[j].cost > dv[i].dvEntry[idx].cost + dv[idx].dvEntry[j].cost) {
+						dv[i].dvEntry[j].cost = dv[i].dvEntry[idx].cost + dv[idx].dvEntry[j].cost;
+						if(i == 0) {
+							routingtable_setnextnode(routingtable, dv[i].dvEntry[j].nodeID, srcNode);
+						}
+					}
+				}
+			}
+
+		} else if(pkt.header.dest_nodeID == myNodeID) {
+			Assert(pkt.header.type == SIP, "Strange packet to me, but not SIP packet.");
+			if(stcp_conn > 0) {
+				forwardsegToSTCP(stcp_conn, pkt.header.src_nodeID, (seg_t*)pkt.data);
+				Log("SIP forwarding packet to STCP.");
+			} else {
+				Log("SIP receiving packet, but STCP connection hasn't beend constructed.");
+			}
+		} else {
+			if(routingtable_getnextnode(routingtable, pkt.header.dest_nodeID) != -1) {
+				sip_hdr_to_network_order(&(pkt.header));
+				if(son_sendpkt(ntohl(pkt.header.dest_nodeID), &pkt, son_conn) != 1) {
+					Log("SIP forwarding pakcet failed!");
+				} else {
+					Log("SIP forwarding packet to %d", ntohl(pkt.header.dest_nodeID));
+				}
+			} else {
+				Log("This packet is not desting to me, and I can't forward it out!!!");
+			}
+		}
 	}
 
 	Log("pkthandler thread exits.");
@@ -145,14 +214,37 @@ void waitSTCP() {
 	stcp_conn = accept(listenfd, &cliaddr, &clilen);
 	Log("[SIP] STCP connected SIP!");
 
-	//TODO
-	//sendseg_arg_t seg_arg;
+	int nextNode;
+	seg_t seg;
+	sip_pkt_t sip_pkt;
+
+	while(1) {
+		int ret = getsegToSend(stcp_conn, &nextNode, &seg);
+		if(ret != 1) {
+			Log("getsegToSend failed!");
+			return;
+		}
+
+		memset(&sip_pkt, 0, sizeof(sip_pkt));
+		sip_pkt.header.src_nodeID = topology_getMyNodeID();
+		sip_pkt.header.dest_nodeID = nextNode;
+		sip_pkt.header.type = SIP;
+		sip_pkt.header.length = sizeof(seg.header) + seg.data_len;
+		memcpy(&(sip_pkt.data), &seg, sip_pkt.header.length);
+
+		sip_hdr_to_network_order(&sip_pkt.header);
+
+		if(son_sendpkt(nextNode, &sip_pkt, son_conn) != 1) {
+			Log("SIP recv STCP data, but send to son failed.");
+		}
+	}
 }
 
 int main(int argc, char *argv[]) {
 	printf("SIP layer is starting, pls wait...\n");
 
 	//初始化全局变量
+	topology_init();
 	nct = nbrcosttable_create();
 	dv = dvtable_create();
 	dv_mutex = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));

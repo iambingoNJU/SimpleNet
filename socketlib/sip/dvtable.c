@@ -104,6 +104,18 @@ unsigned int dvtable_getcost(dv_t* dvtable, int fromNodeID, int toNodeID) {
 	return INFINITE_COST;
 }
 
+int dvtable_getidx(dv_t* dvtable, int fromNodeID) {
+	int nr_nbr = topology_getNbrNum();
+
+	for(int i = 0; i <= nr_nbr; i ++) {
+		if(dvtable[i].nodeID == fromNodeID) {
+			return i;
+		}
+	}
+
+	return -1;
+}
+
 //这个函数打印距离矢量表的内容.
 void dvtable_print(dv_t* dvtable) {
 	int nr_nbr = topology_getNbrNum();

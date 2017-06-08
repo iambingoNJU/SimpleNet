@@ -45,4 +45,6 @@ unsigned int dvtable_getcost(dv_t* dvtable, int fromNodeID, int toNodeID);
 //这个函数打印距离矢量表的内容.
 void dvtable_print(dv_t* dvtable);
 
+int dvtable_getidx(dv_t* dvtable, int fromNodeID);
+
 #endif

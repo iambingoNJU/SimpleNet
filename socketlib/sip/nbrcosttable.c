@@ -17,8 +17,24 @@
 //这个函数动态创建邻居代价表并使用邻居节点ID和直接链路代价初始化该表.
 //邻居的节点ID和直接链路代价提取自文件topology.dat. 
 nbr_cost_entry_t* nbrcosttable_create() {
-	// TODO
-  return 0;
+	nbr_cost_entry_t *nct = NULL;
+	int myNodeID = topology_getMyNodeID();
+	int nr_nbr = topology_getNbrNum();
+	int *nbr_arr = topology_getNbrArray();
+
+	for(int i = 0; i < nr_nbr; i ++) {
+		nbr_cost_entry_t *new_entry = (nbr_cost_entry_t*)malloc(sizeof(nbr_cost_entry_t));
+		Assert(new_entry != NULL, "Creating neighbour cost entry failed.");
+		new_entry->nodeID = nbr_arr[i];
+		new_entry->cost = topology_getCost(myNodeID, nbr_arr[i]);
+
+		new_entry->next = nct;
+		nct = new_entry;
+	}
+
+	free(nbr_arr);
+
+	return nct;
 }
 
 //这个函数删除邻居代价表.
