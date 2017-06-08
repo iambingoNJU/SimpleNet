@@ -145,7 +145,8 @@ void waitSTCP() {
 	stcp_conn = accept(listenfd, &cliaddr, &clilen);
 	Log("[SIP] STCP connected SIP!");
 
-	sendseg_arg_t seg_arg;
+	//TODO
+	//sendseg_arg_t seg_arg;
 }
 
 int main(int argc, char *argv[]) {

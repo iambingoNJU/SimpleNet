@@ -51,7 +51,7 @@ int sip_sendseg(int connection, int dest_nodeID, seg_t* segPtr) {
 	int ret = 1;
 
 	sendseg_arg_t seg_arg;
-	memset(seg_arg, 0, sizeof(seg_arg));
+	memset(&seg_arg, 0, sizeof(seg_arg));
 	seg_arg.nodeID = htonl(dest_nodeID);
 	memcpy(&(seg_arg.seg), segPtr, sizeof(seg_t));
 
@@ -139,7 +139,7 @@ int getsegToSend(int stcp_conn, int* dest_nodeID, seg_t* segPtr) {
 	} else {
 		Log("recv_len = %d, it should be checked!!!", recv_len);
 		*dest_nodeID = ntohl(seg_arg.nodeID);
-		memcpy(segPtr, &(seg_arg.seg), sizeof(seg_arg.seg);
+		memcpy(segPtr, &(seg_arg.seg), sizeof(seg_arg.seg));
 
 		return 1;
 	}
@@ -153,14 +153,14 @@ int forwardsegToSTCP(int stcp_conn, int src_nodeID, seg_t* segPtr) {
 	Assert(segPtr != NULL, "segPtr is NULL!");
 
 	sendseg_arg_t seg_arg;
-	memset(seg_arg, 0, sizeof(seg_arg));
+	memset(&seg_arg, 0, sizeof(seg_arg));
 	seg_arg.nodeID = htonl(src_nodeID);
 	memcpy(&(seg_arg.seg), segPtr, sizeof(seg_t));
 
 	int len = sizeof(seg_arg);
-	if(tcp_send_data(connection, (char*)&seg_arg, len) != -1) {
+	if(tcp_send_data(stcp_conn, (char*)&seg_arg, len) != -1) {
 		Log("Sending segment error!");
-		ret = -1;
+		return -1;
 	}
 
 	return 1;
