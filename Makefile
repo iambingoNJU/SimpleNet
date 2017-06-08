@@ -1,52 +1,34 @@
+CC = gcc
+CFLAGS = -std=gnu99 -Wall -Werror -pthread -g
 
-CC := gcc
-CFLAGS := -std=gnu99 -Wall -Werror -pthread -g
+CLIENT_APP_SRC = client/app_simple_client.c
+CLIENT_APP_OBJ = $(CLIENT_APP_SRC:.c=.o)
+CLIENT_APP = client.elf
 
-COMMON_SRC := $(wildcard topology/*.c)
-COMMON_SRC += $(wildcard common/*.c)
-COMMON_OBJ := $(COMMON_SRC:.c=.o)
+SERVER_APP_SRC = server/app_simple_server.c
+SERVER_APP_OBJ = $(SERVER_APP_SRC:.c=.o)
+SERVER_APP := server.elf
+include socketlib/Makefile
 
-SON_SRC := $(wildcard son/*.c)
-SON_OBJ := $(SON_SRC:.c=.o)
-SON := son.elf
+all: socketlib $(CLIENT_APP) $(SERVER_APP)
 
-SIP_SRC := $(wildcard sip/*.c)
-SIP_OBJ := $(SIP_SRC:.c=.o)
-SIP := sip.elf
+$(CLIENT_APP): $(CLIENT_APP_OBJ) $(STCP_ARCH)
+	$(CC) $(CFLAGS) -I$(STCP_ARCH) -L$(libpath) $^ -o $@
 
-CLIENT_SRC := client/stcp_client.c
-CLIENT_SRC += client/app_simple_client.c
-CLIENT_OBJ := $(CLIENT_SRC:.c=.o)
-CLIENT := client.elf
-
-SERVER_SRC := server/stcp_server.c
-SERVER_SRC += server/app_simple_server.c
-SERVER_OBJ := $(SERVER_SRC:.c=.o)
-SERVER := server.elf
-
-.PHONY: all clean
-
-all: $(SON) $(SIP) $(CLIENT) $(SERVER)
-
-$(SON): $(SON_OBJ) $(COMMON_OBJ)
-	$(CC) $(CFLAGS) $^ -o $@
-
-$(SIP): $(SIP_OBJ) $(COMMON_OBJ)
-	$(CC) $(CFLAGS) $^ -o $@
-
-$(CLIENT): $(CLIENT_OBJ) $(COMMON_OBJ)
-	$(CC) $(CFLAGS) $^ -o $@
-
-$(SERVER): $(SERVER_OBJ) $(COMMON_OBJ)
-	$(CC) $(CFLAGS) $^ -o $@
+$(SERVER_APP): $(SERVER_APP_OBJ) $(STCP_ARCH)
+	$(CC) $(CFLAGS) -I$(STCP_ARCH) -L$(libpath) $^ -o $@
 
 %.o: %.c
-	$(CC) $(CFLAGS) -c $^ -o $@ 
+	$(CC) $(CFLAGS) -c $^ -o $@
+.PHONY: all clean
 
 clean:
 	-rm -f $(COMMON_OBJ)
 	-rm -f $(SON_OBJ) $(SON)
 	-rm -f $(SIP_OBJ) $(SIP)
-	-rm -f $(CLIENT_OBJ) $(CLIENT)
-	-rm -f $(SERVER_OBJ) $(SERVER)
-
+	-rm -f $(STCP_OBJ) $(STCP_ARCH)
+	-rm -f $(SERVER_APP) $(SERVER_APP_OBJ)
+	-rm -f $(CLIENT_APP) $(CLIENT_APP_OBJ) 
+	
+	
+	

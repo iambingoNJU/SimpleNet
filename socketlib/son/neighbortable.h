@@ -12,10 +12,16 @@
 //一张邻居表包含n个条目, 其中n是邻居的数量
 //每个节点都运行一个简单重叠网络进程SON, 每个SON进程为运行该进程的节点维护一张邻居表.
 
+enum {
+	SON_CLOSED = 2,
+	SON_CONNECTED
+};
+
 typedef struct neighborentry {
   int nodeID;	        //邻居的节点ID
   in_addr_t nodeIP;     //邻居的IP地址
   int conn;	            //针对这个邻居的TCP连接套接字描述符
+  int state;
 } nbr_entry_t;
 
 //这个函数首先动态创建一个邻居表. 然后解析文件topology/topology.dat, 填充所有条目中的nodeID和nodeIP字段, 将conn字段初始化为-1.
