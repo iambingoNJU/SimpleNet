@@ -26,7 +26,7 @@ SERVER := server.elf
 
 .PHONY: all clean
 
-all: $(SON) $(SIP) $(STCP)
+all: $(SON) $(SIP) $(CLIENT) $(SERVER)
 
 $(SON): $(SON_OBJ) $(COMMON_OBJ)
 	$(CC) $(CFLAGS) $^ -o $@
