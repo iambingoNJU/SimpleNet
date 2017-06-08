@@ -60,7 +60,7 @@ typedef struct sendsegargument {
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 //
 
-int sip_sendseg(int connection, seg_t* segPtr);
+int sip_sendseg(int connection, int dest_nodeID, seg_t* segPtr);
 
 // 通过重叠网络(在本实验中，是一个TCP连接)发送STCP段. 因为TCP以字节流形式发送数据, 
 // 为了通过重叠网络TCP连接发送STCP段, 你需要在传输STCP段时，在它的开头和结尾加上分隔符. 
@@ -71,7 +71,7 @@ int sip_sendseg(int connection, seg_t* segPtr);
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 //
 
-int sip_recvseg(int connection, seg_t* segPtr);
+int sip_recvseg(int connection, int* src_nodeID, seg_t* segPtr);
 
 // 通过重叠网络(在本实验中，是一个TCP连接)接收STCP段. 我们建议你使用recv()一次接收一个字节.
 // 你需要查找"!&", 然后是seg_t, 最后是"!#". 这实际上需要你实现一个搜索的FSM, 可以考虑使用如下所示的FSM.

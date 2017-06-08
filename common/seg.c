@@ -44,17 +44,22 @@ static pthread_mutex_t conn_mutex = PTHREAD_MUTEX_INITIALIZER;
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 //
 
-int sip_sendseg(int connection, seg_t* segPtr) {
+int sip_sendseg(int connection, int dest_nodeID, seg_t* segPtr) {
 	Assert(connection >= 0, "Invalid connection!");
 	Assert(segPtr != NULL, "SegPtr in NULL!");
 
 	int ret = 1;
 
+	sendseg_arg_t seg_arg;
+	memset(seg_arg, 0, sizeof(seg_arg));
+	seg_arg.nodeID = htonl(dest_nodeID);
+	memcpy(&(seg_arg.seg), segPtr, sizeof(seg_t));
+
 	// there are muliple connections at the same time, so we should make sure only one can send data at one time
 	pthread_mutex_lock(&conn_mutex);
 
-	int len = sizeof(stcp_hdr_t) + segPtr->data_len;
-	if(tcp_send_data(connection, (char*)segPtr, len) != -1) {
+	int len = sizeof(seg_arg.nodeID) + sizeof(seg_arg.seg.header) + seg_arg.seg.data_len;
+	if(tcp_send_data(connection, (char*)&seg_arg, len) != -1) {
 		Log("Sending segment error!");
 		ret = -1;
 	}
@@ -83,97 +88,82 @@ int sip_sendseg(int connection, seg_t* segPtr) {
 //
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 // 
-int sip_recvseg(int connection, seg_t* segPtr) {
-	Assert(connection > 0, "Invalid connection!");
+int sip_recvseg(int connection, int* src_nodeID, seg_t* segPtr) {
+	Assert(connection >= 0, "Invalid connection!");
 	Assert(segPtr, "SegPtr is NULL!");
 
-	char ch = 0;
-	int flag = 0;
-	unsigned cnt = 0;
-	char rcv_buffer[2048];
-	memset(rcv_buffer, 0, 2048);
+	sendseg_arg_t seg_arg;
+	memset(&seg_arg, 0, sizeof(seg_arg));
 
-	int state = 0;
-	while(rcvn(connection, &ch, 1) == 1) {
-		switch(state) {
-			case 0: {
-				if(ch == '!') {
-					state = 1;
-				} else {
-					Assert(0, "Expect receiving leading '!', but received '%c'.", ch);
-				}
+	int recv_len = tcp_recv_data(connection, (char*)&seg_arg, sizeof(seg_arg));
 
-				break;
+	if(recv_len == -1) {
+		Log("Can't receive data!");
+		return -1;
+	} else {
+		Log("recv_len = %d, it should be checked!!!", recv_len);
+		*src_nodeID = ntohl(seg_arg.nodeID);
+		memcpy(segPtr, &(seg_arg.seg), recv_len - sizeof(seg_arg.nodeID));
+		segPtr->data_len = recv_len - sizeof(seg_arg.nodeID) - sizeof(seg_arg.seg.header);
+		if (seglost(segPtr) == 1) {
+			Log("[Seg recv] Seg is Lost, seq_num = %d.", ntohl(segPtr->header.seq_num));
+			return 1;
+		} else {
+			if (checkchecksum(segPtr) == -1) {
+				Log("[Seg recv] Seg is corrupted, seq_num = %d.", ntohl(segPtr->header.seq_num));
+				return 1;
+			} else {
+				//Log("[Seg recv] src_port = 0x%x, dest_port = 0x%x", segPtr->header.src_port, segPtr->header.dest_port);
+				return 0;
 			}
-
-			case 1: {
-				if(ch == '&') {
-					state = 2;
-				} else {
-					Assert(0, "Expect receiving leading '&', but received '%c'.", ch);
-				}
-
-				break;
-			}
-
-			case 2: {
-				if((flag == 1) && (ch == '#')) {
-					cnt --;	// ignore last '!'
-
-					memcpy(segPtr, rcv_buffer, cnt);
-					segPtr->data_len = cnt - sizeof(stcp_hdr_t);
-
-					if (seglost(segPtr) == 1) {
-						Log("[Seg recv] Seg is Lost, seq_num = %d.", ntohl(segPtr->header.seq_num));
-						return 1;
-					} else {
-						if (checkchecksum(segPtr) == -1) {
-							Log("[Seg recv] Seg is corrupted, seq_num = %d.", ntohl(segPtr->header.seq_num));
-							//state = ch = flag = cnt = 0;
-							//memset(rcv_buffer, 0, 2048);
-							//continue;
-							return 1;
-						} else {
-							//Log("[Seg recv] src_port = 0x%x, dest_port = 0x%x", segPtr->header.src_port, segPtr->header.dest_port);
-							return 0;
-						}
-					}
-				}
-
-				if(ch == '!') {
-					flag = 1;
-				} else {
-					flag = 0;
-				}
-
-				rcv_buffer[cnt ++] = ch;
-				break;
-			}
-
-		}
-
-		if(cnt >= sizeof(seg_t)) {
-			Assert(0, "Receiving a too big segment.");
 		}
 	}
-
-	return -1;
 }
 
 //SIP进程使用这个函数接收来自STCP进程的包含段及其目的节点ID的sendseg_arg_t结构.
 //参数stcp_conn是在STCP进程和SIP进程之间连接的TCP描述符.
 //如果成功接收到sendseg_arg_t就返回1, 否则返回-1.
-int getsegToSend(int stcp_conn, int* dest_nodeID, seg_t* segPtr)
-{
-	  return 0;
+int getsegToSend(int stcp_conn, int* dest_nodeID, seg_t* segPtr) {
+	Assert(stcp_conn >= 0, "Invalid stcp_conn!");
+	Assert(segPtr != NULL, "segPtr is NULL!");
+	Assert(dest_nodeID != NULL, "dest_nodeID is NULL!");
+
+	sendseg_arg_t seg_arg;
+	memset(&seg_arg, 0, sizeof(seg_arg));
+
+	int recv_len = tcp_recv_data(stcp_conn, (char*)&seg_arg, sizeof(seg_arg));
+
+	if(recv_len == -1) {
+		Log("Can't receive data!");
+		return -1;
+	} else {
+		Log("recv_len = %d, it should be checked!!!", recv_len);
+		*dest_nodeID = ntohl(seg_arg.nodeID);
+		memcpy(segPtr, &(seg_arg.seg), sizeof(seg_arg.seg);
+
+		return 1;
+	}
 }
 
 //SIP进程使用这个函数发送包含段及其源节点ID的sendseg_arg_t结构给STCP进程.
 //参数stcp_conn是STCP进程和SIP进程之间连接的TCP描述符.
 //如果sendseg_arg_t被成功发送就返回1, 否则返回-1.
-int forwardsegToSTCP(int stcp_conn, int src_nodeID, seg_t* segPtr)
-{
-	  return 0;
+int forwardsegToSTCP(int stcp_conn, int src_nodeID, seg_t* segPtr) {
+	Assert(stcp_conn >= 0, "Invalid stcp_conn!");
+	Assert(segPtr != NULL, "segPtr is NULL!");
+
+	sendseg_arg_t seg_arg;
+	memset(seg_arg, 0, sizeof(seg_arg));
+	seg_arg.nodeID = htonl(src_nodeID);
+	memcpy(&(seg_arg.seg), segPtr, sizeof(seg_t));
+
+	int len = sizeof(seg_arg);
+	if(tcp_send_data(connection, (char*)&seg_arg, len) != -1) {
+		Log("Sending segment error!");
+		ret = -1;
+	}
+
+	return 1;
 }
 
 int seglost(seg_t* segPtr) {
