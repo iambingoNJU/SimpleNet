@@ -18,6 +18,7 @@
 #include <sys/utsname.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "../common/debug.h"
 #include "../common/constants.h"
@@ -227,7 +228,11 @@ void waitSTCP() {
 	while(1) {
 		stcp_conn = accept(listenfd, &cliaddr, &clilen);
 
+		if(stcp_conn < 0) {
+			perror("accept error");
+		}
 		Assert(stcp_conn > 0, "accept error!!!");
+
 		Log("[SIP] STCP connected SIP!");
 
 		int nextNode;
