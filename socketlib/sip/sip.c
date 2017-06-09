@@ -37,11 +37,13 @@
 /**************************************************************/
 int son_conn = -1; 		//到重叠网络的连接
 int stcp_conn;			//到STCP的连接
-nbr_cost_entry_t* nct;			//邻居代价表
-dv_t* dv;				//距离矢量表
-pthread_mutex_t* dv_mutex;		//距离矢量表互斥量
-routingtable_t* routingtable;		//路由表
+
+nbr_cost_entry_t* nct;					//邻居代价表
+dv_t* dv;								//距离矢量表
+pthread_mutex_t* dv_mutex;				//距离矢量表互斥量
+routingtable_t* routingtable;			//路由表
 pthread_mutex_t* routingtable_mutex;	//路由表互斥量
+
 pthread_t pkt_handler_thread = -1; 
 pthread_t routeupdate_thread = -1;
 

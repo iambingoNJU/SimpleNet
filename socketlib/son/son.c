@@ -39,6 +39,8 @@ nbr_entry_t* nt;
 //将与SIP进程之间的TCP连接声明为一个全局变量
 int sip_conn; 
 
+static pthread_mutex_t sip_conn_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 /**************************************************************/
 //实现重叠网络函数
 /**************************************************************/
@@ -125,7 +127,9 @@ void* listen_to_neighbor(void* arg) {
 		}
 
 		if(sip_conn >= 0) {
+			pthread_mutex_lock(&sip_conn_mutex);
 			forwardpktToSIP(pkt, sip_conn);
+			pthread_mutex_unlock(&sip_conn_mutex);
 			printf("[thread %d] son recv message from neighbor %d.\n", idx, ntohl(pkt->header.src_nodeID));
 		} else {
 			printf("[thread %d] son recv message from neighbor %d. But local sip has not been constructed.\n", idx, ntohl(pkt->header.src_nodeID));
