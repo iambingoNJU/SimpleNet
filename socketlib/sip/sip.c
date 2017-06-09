@@ -45,6 +45,7 @@ pthread_mutex_t* routingtable_mutex;	//路由表互斥量
 pthread_t pkt_handler_thread = -1; 
 pthread_t routeupdate_thread = -1;
 
+static pthread_mutex_t son_conn_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void sip_hdr_to_network_order(sip_hdr_t *piphdr) {
 	piphdr->src_nodeID = htonl(piphdr->src_nodeID);
@@ -108,7 +109,14 @@ void* routeupdate_daemon(void* arg) {
 
 	sip_hdr_to_network_order(&pkt.header);
 
-	while(son_sendpkt(BROADCAST_NODEID, &pkt, son_conn) > 0) {
+	while(1) {
+		pthread_mutex_lock(&son_conn_mutex);
+		if(son_sendpkt(BROADCAST_NODEID, &pkt, son_conn) != 1) {
+			Log("Sending packet failed.");
+			break;
+		}
+		pthread_mutex_unlock(&son_conn_mutex);
+
 		Log("Sending UPDATE ROUTE message!!!");
 		sleep(ROUTEUPDATE_INTERVAL);
 	}
@@ -170,11 +178,13 @@ void* pkthandler(void* arg) {
 		} else {
 			if(routingtable_getnextnode(routingtable, pkt.header.dest_nodeID) != -1) {
 				sip_hdr_to_network_order(&(pkt.header));
+				pthread_mutex_lock(&son_conn_mutex);
 				if(son_sendpkt(ntohl(pkt.header.dest_nodeID), &pkt, son_conn) != 1) {
 					Log("SIP forwarding pakcet failed!");
 				} else {
 					Log("SIP forwarding packet to %d", ntohl(pkt.header.dest_nodeID));
 				}
+				pthread_mutex_unlock(&son_conn_mutex);
 			} else {
 				Log("This packet is not desting to me, and I can't forward it out!!!");
 			}
@@ -234,9 +244,11 @@ void waitSTCP() {
 
 		sip_hdr_to_network_order(&sip_pkt.header);
 
+		pthread_mutex_lock(&son_conn_mutex);
 		if(son_sendpkt(nextNode, &sip_pkt, son_conn) != 1) {
 			Log("SIP recv STCP data, but send to son failed.");
 		}
+		pthread_mutex_unlock(&son_conn_mutex);
 	}
 }
 
