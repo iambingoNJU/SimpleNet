@@ -19,10 +19,10 @@ $(CLIENT_APP): $(CLIENT_APP_OBJ) $(STCP_ARCH)
 $(SERVER_APP): $(SERVER_APP_OBJ) $(STCP_ARCH)
 	$(CC) $(CFLAGS) -I$(STCP_ARCH) -L$(libpath) $^ -o $@
 
-%.o: %.c
-	$(CC) $(CFLAGS) -c $^ -o $@
 .PHONY: all clean
 
+update: script/*
+	cd script && ./update-all.sh
 clean:
 	-rm -f $(COMMON_OBJ)
 	-rm -f $(SON_OBJ) $(SON)

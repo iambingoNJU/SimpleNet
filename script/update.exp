@@ -1,0 +1,29 @@
+#!/usr/bin/expect
+
+set timeout 30
+
+set username [lindex $argv 0]
+set ip [lindex $argv 1]
+
+spawn ssh $username@$ip
+
+expect {
+	"(yes/no)" { send "yes\r"; exp_continue }
+	"password" { send "zhengbin\r" }
+}
+
+send "\r"
+expect "$username@ubuntu"
+send "cd Desktop/lab08\r"
+expect "$username@ubuntu"
+send "make clean\r"
+expect "$username@ubuntu"
+send "git pull origin sip:sip\r"
+expect "password"
+send "pipeline\r"
+expect "$username@ubuntu"
+send "make\r"
+expect "$username@ubuntu"
+send "exit\r"
+
+expect "Connection to $ip closed."
