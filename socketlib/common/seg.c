@@ -55,7 +55,7 @@ int sip_sendseg(int connection, int dest_nodeID, seg_t* segPtr) {
 	memcpy(&(seg_arg.seg), segPtr, sizeof(seg_t));
 
 	int len = sizeof(seg_arg.nodeID) + sizeof(seg_arg.seg.header) + seg_arg.seg.data_len;
-	if(tcp_send_data(connection, (char*)&seg_arg, len) != -1) {
+	if(tcp_send_data(connection, (char*)&seg_arg, len) != 1) {
 		Log("Sending segment error!");
 		ret = -1;
 	}
@@ -152,7 +152,7 @@ int forwardsegToSTCP(int stcp_conn, int src_nodeID, seg_t* segPtr) {
 	memcpy(&(seg_arg.seg), segPtr, sizeof(seg_t));
 
 	int len = sizeof(seg_arg);
-	if(tcp_send_data(stcp_conn, (char*)&seg_arg, len) != -1) {
+	if(tcp_send_data(stcp_conn, (char*)&seg_arg, len) != 1) {
 		Log("Sending segment error!");
 		return -1;
 	}
