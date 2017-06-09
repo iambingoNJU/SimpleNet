@@ -1,11 +1,11 @@
 CC = gcc
 CFLAGS = -std=gnu99 -Wall -Werror -pthread -g
 
-CLIENT_APP_SRC = client_app/app_simple_client.c
+CLIENT_APP_SRC = client_app/app_stress_client.c
 CLIENT_APP_OBJ = $(CLIENT_APP_SRC:.c=.o)
 CLIENT_APP = client.elf
 
-SERVER_APP_SRC = server_app/app_simple_server.c
+SERVER_APP_SRC = server_app/app_stress_server.c
 SERVER_APP_OBJ = $(SERVER_APP_SRC:.c=.o)
 SERVER_APP := server.elf
 
