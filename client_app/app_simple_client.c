@@ -76,6 +76,8 @@ int main() {
 	stcp_client_init(sip_conn);
 	sleep(STARTDELAY);
 
+	topology_init();
+
 	char hostname[50];
 	printf("Enter server name to connect:");
 	scanf("%s",hostname);
