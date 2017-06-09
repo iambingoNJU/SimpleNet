@@ -29,6 +29,8 @@ int son_sendpkt(int nextNodeID, sip_pkt_t* pkt, int son_conn) {
 		return -1;
 	}
 
+	Log("len = %d", len);
+
 	return 1;
 }
 
@@ -45,6 +47,8 @@ int son_recvpkt(sip_pkt_t* pkt, int son_conn) {
 	Assert(pkt != NULL, "pkt is NULL!");
 
 	int recv_len = tcp_recv_data(son_conn, (char*)pkt, sizeof(sip_pkt_t));
+
+	Log("len = %d", recv_len);
 
 	if(recv_len == -1) {
 		Log("Can't receive data!");
@@ -75,6 +79,8 @@ int getpktToSend(sip_pkt_t* pkt, int* nextNode, int sip_conn) {
 
 	int recv_len = tcp_recv_data(sip_conn, (char*)&arg, sizeof(arg));
 
+	Log("len = %d", recv_len);
+
 	if(recv_len == -1) {
 		Log("Can't receive data!");
 		return -1;
@@ -103,6 +109,8 @@ int forwardpktToSIP(sip_pkt_t* pkt, int sip_conn) {
 		return -1;
 	}
 
+	Log("len = %d", len);
+
 	return 1;
 }
 
@@ -121,6 +129,8 @@ int sendpkt(sip_pkt_t* pkt, int conn) {
 		return -1;
 	}
 
+	Log("len = %d", len);
+
 	return 1;
 }
 
@@ -138,6 +148,8 @@ int recvpkt(sip_pkt_t* pkt, int conn) {
 	Assert(pkt != NULL, "pkt is NULL!");
 
 	int recv_len = tcp_recv_data(conn, (char*)pkt, sizeof(sip_pkt_t));
+
+	Log("len = %d", recv_len);
 
 	if(recv_len == -1) {
 		Log("Can't receive data!");

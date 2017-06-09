@@ -60,6 +60,8 @@ int sip_sendseg(int connection, int dest_nodeID, seg_t* segPtr) {
 		ret = -1;
 	}
 
+	Log("len = %d", len);
+
 	return ret;
 }
 
@@ -160,6 +162,8 @@ int forwardsegToSTCP(int stcp_conn, int src_nodeID, seg_t* segPtr) {
 		Log("Sending segment error!");
 		return -1;
 	}
+
+	Log("len = %d", len);
 
 	return 1;
 }
