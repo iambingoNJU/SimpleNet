@@ -20,7 +20,6 @@
 #include "lib-socket.h"
 
 
-static pthread_mutex_t conn_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 //
 //
@@ -55,16 +54,11 @@ int sip_sendseg(int connection, int dest_nodeID, seg_t* segPtr) {
 	seg_arg.nodeID = htonl(dest_nodeID);
 	memcpy(&(seg_arg.seg), segPtr, sizeof(seg_t));
 
-	// there are muliple connections at the same time, so we should make sure only one can send data at one time
-	pthread_mutex_lock(&conn_mutex);
-
 	int len = sizeof(seg_arg.nodeID) + sizeof(seg_arg.seg.header) + seg_arg.seg.data_len;
 	if(tcp_send_data(connection, (char*)&seg_arg, len) != -1) {
 		Log("Sending segment error!");
 		ret = -1;
 	}
-
-	pthread_mutex_unlock(&conn_mutex);
 
 	return ret;
 }

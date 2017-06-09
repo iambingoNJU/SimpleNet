@@ -32,6 +32,8 @@ tcb_list_item tcb_list[MAX_TRANSPORT_CONNECTIONS];
 unsigned int gSeqNum = 0;
 int stcp2sip_conn;
 
+static pthread_mutex_t stcp2sip_conn_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 // stcp客户端初始化
 //
 // 这个函数初始化TCB表, 将所有条目标记为NULL.  
@@ -114,11 +116,13 @@ int stcp_client_connect(int sockfd, int nodeID, unsigned int server_port) {
 
 	int n = SYN_MAX_RETRY;
 	while(n --> 0) {	// interesting --> operator
+		pthread_mutex_lock(&stcp2sip_conn_mutex);
 		if(sip_sendseg(stcp2sip_conn, tcb_list[sockfd].tcb.server_nodeID, &seg) == 1) {
 			Log("STCP client socket %d sending SYN %d!", sockfd, SYN_MAX_RETRY - n);
 		} else {
 			Log("STCP client socket %d sending SYN %d failed!", sockfd, SYN_MAX_RETRY - n);
 		}
+		pthread_mutex_unlock(&stcp2sip_conn_mutex);
 
 		usleep(SYN_TIMEOUT / 1000);
 
@@ -203,11 +207,13 @@ int stcp_client_disconnect(int sockfd) {
 
 	int n = FIN_MAX_RETRY;
 	while(n --> 0) {
+		pthread_mutex_lock(&stcp2sip_conn_mutex);
 		if(sip_sendseg(stcp2sip_conn, tcb_list[sockfd].tcb.server_nodeID, &seg) == 1) {
 			Log("STCP client %d sending FIN %d!", sockfd, FIN_MAX_RETRY - n);
 		} else {
 			Log("STCP client %d sending FIN %d failed!", sockfd, FIN_MAX_RETRY - n);
 		}
+		pthread_mutex_unlock(&stcp2sip_conn_mutex);
 
 		usleep(FIN_TIMEOUT / 1000);
 
@@ -355,12 +361,14 @@ void* sendBuf_timer(void* clienttcb) {
 		if(getTime() - ptcb->tcb.sendBufHead->sentTime > DATA_TIMEOUT / 1000) {
 			Log("STCP client send buffer timeout, resending...");
 			for(segBuf_t *sb = ptcb->tcb.sendBufHead; sb && (sb != ptcb->tcb.sendBufunSent); sb = sb->next) {
+				pthread_mutex_lock(&stcp2sip_conn_mutex);
 				if(sip_sendseg(stcp2sip_conn, ptcb->tcb.server_nodeID, &sb->seg) == 1) {
 					Log("Resended segment sequence number: %d", ntohl(sb->seg.header.seq_num));
 					sb->sentTime = getTime();
 				} else {
 					Log("Sending segment failed!");
 				}
+				pthread_mutex_unlock(&stcp2sip_conn_mutex);
 			}
 		}
 		pthread_mutex_unlock(ptcb->tcb.bufMutex);
@@ -384,11 +392,14 @@ void sendbuf_send(int sockfd) {
 	while((tcb_list[sockfd].tcb.sendBufunSent != NULL) && 
 			(tcb_list[sockfd].tcb.unAck_segNum < GBN_WINDOW)) {
 
+		pthread_mutex_lock(&stcp2sip_conn_mutex);
 		if(sip_sendseg(stcp2sip_conn, tcb_list[sockfd].tcb.server_nodeID, &(tcb_list[sockfd].tcb.sendBufunSent->seg)) == 1) {
 			Log("Sending segment out. seq_num = %d.", ntohl(tcb_list[sockfd].tcb.sendBufunSent->seg.header.seq_num));
 		} else {
 			Log("Sending segment failed.");
 		}
+		pthread_mutex_unlock(&stcp2sip_conn_mutex);
+
 		tcb_list[sockfd].tcb.sendBufunSent->sentTime = getTime();
 
 		if(tcb_list[sockfd].tcb.unAck_segNum == 0) {
