@@ -97,6 +97,7 @@ int sip_recvseg(int connection, int* src_nodeID, seg_t* segPtr) {
 	} else {
 		Log("recv_len = %d, it should be checked!!!", recv_len);
 		*src_nodeID = ntohl(seg_arg.nodeID);
+		Log("src_node: %d.\n", *src_nodeID);
 		memcpy(segPtr, &(seg_arg.seg), recv_len - sizeof(seg_arg.nodeID));
 		segPtr->data_len = recv_len - sizeof(seg_arg.nodeID) - sizeof(seg_arg.seg.header);
 		return 1;

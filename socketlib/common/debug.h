@@ -10,7 +10,8 @@
 
 #define Log(format, ...) \
 	do { \
-		fprintf(stdout, "\33[0;34m[INFO] " format "\33[0m\n", ## __VA_ARGS__); \
+		fprintf(stdout, "\33[0;34m[%s,%d,%s] " format "\33[0m\n", \
+				__FILE__, __LINE__, __func__, ## __VA_ARGS__); \
 		fflush(stdout); \
 	} while(0)
 
