@@ -99,6 +99,8 @@ int sip_recvseg(int connection, int* src_nodeID, seg_t* segPtr) {
 		*src_nodeID = ntohl(seg_arg.nodeID);
 		memcpy(segPtr, &(seg_arg.seg), recv_len - sizeof(seg_arg.nodeID));
 		segPtr->data_len = recv_len - sizeof(seg_arg.nodeID) - sizeof(seg_arg.seg.header);
+		return 1;
+		/*
 		if (seglost(segPtr) == 1) {
 			Log("[Seg recv] Seg is Lost, seq_num = %d.", ntohl(segPtr->header.seq_num));
 			return 1;
@@ -111,6 +113,7 @@ int sip_recvseg(int connection, int* src_nodeID, seg_t* segPtr) {
 				return 0;
 			}
 		}
+		*/
 	}
 }
 
