@@ -60,7 +60,7 @@ int sip_sendseg(int connection, int dest_nodeID, seg_t* segPtr) {
 		ret = -1;
 	}
 
-	Log("len = %d", len);
+	//Log("len = %d", len);
 
 	return ret;
 }
@@ -97,10 +97,10 @@ int sip_recvseg(int connection, int* src_nodeID, seg_t* segPtr) {
 		Log("Can't receive data!");
 		return -1;
 	} else {
-		Log("recv_len = %d, it should be checked!!!", recv_len);
+		//Log("recv_len = %d, it should be checked!!!", recv_len);
 		Assert(recv_len == (sizeof(seg_arg.nodeID) + sizeof(seg_arg.seg.header) + ntohs(seg_arg.seg.header.length)), "Unmatched recv_len!");
 		*src_nodeID = ntohl(seg_arg.nodeID);
-		Log("src_node: %d.\n", *src_nodeID);
+		//Log("src_node: %d.\n", *src_nodeID);
 		memcpy(segPtr, &(seg_arg.seg), recv_len - sizeof(seg_arg.nodeID));
 
 		if (seglost(segPtr) == 1) {
@@ -135,7 +135,7 @@ int getsegToSend(int stcp_conn, int* dest_nodeID, seg_t* segPtr) {
 		Log("Can't receive data!");
 		return -1;
 	} else {
-		Log("recv_len = %d, it should be checked!!!", recv_len);
+		//Log("recv_len = %d, it should be checked!!!", recv_len);
 		Assert(recv_len == (sizeof(seg_arg.nodeID) + sizeof(seg_arg.seg.header) + ntohs(seg_arg.seg.header.length)), "Unmatched recv_len!!!");
 		*dest_nodeID = ntohl(seg_arg.nodeID);
 		memcpy(segPtr, &(seg_arg.seg), recv_len - sizeof(seg_arg.nodeID));
@@ -162,7 +162,7 @@ int forwardsegToSTCP(int stcp_conn, int src_nodeID, seg_t* segPtr) {
 		return -1;
 	}
 
-	Log("len = %d", len);
+	//Log("len = %d", len);
 
 	return 1;
 }
