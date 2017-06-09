@@ -31,7 +31,11 @@ dv_t* dvtable_create() {
 	Assert(dv_self != NULL, "Creating dv_entry failed!");
 	for(int j = 0; j < nr_node; j ++) {
 		dv_self[j].nodeID = node_arr[j];
-		dv_self[j].cost = topology_getCost(dvt[0].nodeID, node_arr[j]);
+		if(node_arr[j] == dvt[0].nodeID) {
+			dv_self[j].cost = 0;
+		} else {
+			dv_self[j].cost = topology_getCost(dvt[0].nodeID, node_arr[j]);
+		}
 	}
 	dvt[0].dvEntry = dv_self;
 
