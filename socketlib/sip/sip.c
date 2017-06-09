@@ -267,7 +267,6 @@ int main(int argc, char *argv[]) {
 	routingtable_mutex = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
 	pthread_mutex_init(routingtable_mutex,NULL);
 	son_conn = -1;
-	stcp_conn = -1;
 
 	nbrcosttable_print(nct);
 	dvtable_print(dv);
@@ -297,8 +296,11 @@ int main(int argc, char *argv[]) {
 	routingtable_print(routingtable);
 
 	//等待来自STCP进程的连接
-	printf("waiting for connection from STCP process\n");
-	waitSTCP(); 
+	while(1) {
+		stcp_conn = -1;
+		printf("waiting for connection from STCP process\n");
+		waitSTCP(); 
+	}
 
 }
 
