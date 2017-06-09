@@ -37,7 +37,6 @@ typedef struct stcp_hdr {
 typedef struct segment {
 	stcp_hdr_t header;
 	char data[MAX_SEG_LEN];
-	int data_len;
 } seg_t;
 
 //这是在SIP进程和STCP进程之间交换的数据结构.

@@ -147,7 +147,6 @@ void* pkthandler(void* arg) {
 		if(pkt.header.dest_nodeID == BROADCAST_NODEID) {
 			Assert(pkt.header.type == ROUTE_UPDATE, "Strange broadcast pakcet, but not ROUTE_UPDATE packet.");
 			Log("SIP receiving route update packet.");
-			// TODO: update dvtable and routing table
 			pkt_routeupdate_t *update_msg = (pkt_routeupdate_t*)pkt.data;
 			int srcNode = pkt.header.src_nodeID;
 			// update dvtable item src_nodeID
@@ -178,10 +177,11 @@ void* pkthandler(void* arg) {
 				Log("SIP receiving packet, but STCP connection hasn't beend constructed.");
 			}
 		} else {
-			if(routingtable_getnextnode(routingtable, pkt.header.dest_nodeID) != -1) {
+			int nextNode = routingtable_getnextnode(routingtable, pkt.header.dest_nodeID);
+			if(nextNode != -1) {
 				sip_hdr_to_network_order(&(pkt.header));
 				pthread_mutex_lock(&son_conn_mutex);
-				if(son_sendpkt(ntohl(pkt.header.dest_nodeID), &pkt, son_conn) != 1) {
+				if(son_sendpkt(nextNode, &pkt, son_conn) != 1) {
 					Log("SIP forwarding pakcet failed!");
 				} else {
 					Log("SIP forwarding packet to %d", ntohl(pkt.header.dest_nodeID));
@@ -241,7 +241,7 @@ void waitSTCP() {
 		sip_pkt.header.src_nodeID = topology_getMyNodeID();
 		sip_pkt.header.dest_nodeID = nextNode;
 		sip_pkt.header.type = SIP;
-		sip_pkt.header.length = sizeof(seg.header) + seg.data_len;
+		sip_pkt.header.length = sizeof(seg.header) + ntohs(seg.header.length);
 		memcpy(&(sip_pkt.data), &seg, sip_pkt.header.length);
 
 		sip_hdr_to_network_order(&sip_pkt.header);

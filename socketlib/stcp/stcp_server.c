@@ -64,7 +64,6 @@ static int xstcp_packet_send(int sockfd, unsigned short int type, char *data, in
 	if (data != NULL){
 		memcpy(seg->data, data, data_len);
 	}
-	seg->data_len = data_len;
 	seg->header.checksum = checksum(seg);
 	stcp_hdr_to_network_order(&(seg->header));
 	pthread_mutex_lock(&mutex_SON_conn);
@@ -95,11 +94,11 @@ static void* xstcp_close_wait(void * sockfd){
 static int ReceiveBufferSave(int sockfd, struct segment *seg){
 	if (server_tcb_ptr[sockfd]->expect_seqNum == seg->header.seq_num){
 		pthread_mutex_lock(server_tcb_ptr[sockfd]->bufMutex);
-		if(RECEIVE_BUF_SIZE - server_tcb_ptr[sockfd]->usedBufLen >= seg->data_len){
-			memcpy(&(server_tcb_ptr[sockfd]->recvBuf[server_tcb_ptr[sockfd]->usedBufLen]), seg->data, seg->data_len);
+		if(RECEIVE_BUF_SIZE - server_tcb_ptr[sockfd]->usedBufLen >= seg->header.length){
+			memcpy(&(server_tcb_ptr[sockfd]->recvBuf[server_tcb_ptr[sockfd]->usedBufLen]), seg->data, seg->header.length);
 			// printf("RBF memcpy data: %s\n", &(server_tcb_ptr[sockfd]->recvBuf[server_tcb_ptr[sockfd]->usedBufLen]));
-			server_tcb_ptr[sockfd]->usedBufLen += seg->data_len;
-			server_tcb_ptr[sockfd]->expect_seqNum += seg->data_len;
+			server_tcb_ptr[sockfd]->usedBufLen += seg->header.length;
+			server_tcb_ptr[sockfd]->expect_seqNum += seg->header.length;
 			// printf("[STCP ReceiveBufferSave] Get Data:%s\n", seg->data);
 			xstcp_packet_send(sockfd, DATAACK, NULL, 0);
 			Log("[STCP ReceiveBufferSave] Get Data and Saved");

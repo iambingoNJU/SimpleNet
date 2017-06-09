@@ -54,7 +54,7 @@ int sip_sendseg(int connection, int dest_nodeID, seg_t* segPtr) {
 	seg_arg.nodeID = htonl(dest_nodeID);
 	memcpy(&(seg_arg.seg), segPtr, sizeof(seg_t));
 
-	int len = sizeof(seg_arg.nodeID) + sizeof(seg_arg.seg.header) + seg_arg.seg.data_len;
+	int len = sizeof(seg_arg.nodeID) + sizeof(seg_arg.seg.header) + ntohs(seg_arg.seg.header.length);
 	if(tcp_send_data(connection, (char*)&seg_arg, len) != 1) {
 		Log("Sending segment error!");
 		ret = -1;
@@ -98,10 +98,10 @@ int sip_recvseg(int connection, int* src_nodeID, seg_t* segPtr) {
 		return -1;
 	} else {
 		Log("recv_len = %d, it should be checked!!!", recv_len);
+		Assert(recv_len == (sizeof(seg_arg.nodeID) + sizeof(seg_arg.seg.header) + ntohs(seg_arg.seg.header.length)), "Unmatched recv_len!");
 		*src_nodeID = ntohl(seg_arg.nodeID);
 		Log("src_node: %d.\n", *src_nodeID);
 		memcpy(segPtr, &(seg_arg.seg), recv_len - sizeof(seg_arg.nodeID));
-		segPtr->data_len = recv_len - sizeof(seg_arg.nodeID) - sizeof(seg_arg.seg.header);
 		return 1;
 		/*
 		if (seglost(segPtr) == 1) {
@@ -138,8 +138,9 @@ int getsegToSend(int stcp_conn, int* dest_nodeID, seg_t* segPtr) {
 		return -1;
 	} else {
 		Log("recv_len = %d, it should be checked!!!", recv_len);
+		Assert(recv_len == (sizeof(seg_arg.nodeID) + sizeof(seg_arg.seg.header) + ntohs(seg_arg.seg.header.length)), "Unmatched recv_len!!!");
 		*dest_nodeID = ntohl(seg_arg.nodeID);
-		memcpy(segPtr, &(seg_arg.seg), sizeof(seg_arg.seg));
+		memcpy(segPtr, &(seg_arg.seg), recv_len - sizeof(seg_arg.nodeID));
 
 		return 1;
 	}
@@ -157,7 +158,7 @@ int forwardsegToSTCP(int stcp_conn, int src_nodeID, seg_t* segPtr) {
 	seg_arg.nodeID = htonl(src_nodeID);
 	memcpy(&(seg_arg.seg), segPtr, sizeof(seg_t));
 
-	int len = sizeof(seg_arg);
+	int len = (sizeof(seg_arg.nodeID) + sizeof(seg_arg.seg.header) + ntohs(seg_arg.seg.header.length));
 	if(tcp_send_data(stcp_conn, (char*)&seg_arg, len) != 1) {
 		Log("Sending segment error!");
 		return -1;
@@ -179,7 +180,7 @@ int seglost(seg_t* segPtr) {
 		//50%可能性是错误的校验和
 		else {
 			//获取数据长度
-			int len = sizeof(stcp_hdr_t) + segPtr->data_len;
+			int len = sizeof(stcp_hdr_t) + ntohs(segPtr->header.length);
 			//获取要反转的随机位
 			int errorbit = rand() % (len * 8);
 			//反转该比特
@@ -203,7 +204,7 @@ int seglost(seg_t* segPtr) {
 unsigned short checksum(seg_t* segment){
 	unsigned int sum = 0;
 	unsigned short *ptr = (unsigned short *) segment;
-	int len = segment->data_len + sizeof(struct stcp_hdr);
+	int len = segment->header.length + sizeof(struct stcp_hdr);
 	while(len > 1){
 		sum += *(ptr++);
 		len -= 2;

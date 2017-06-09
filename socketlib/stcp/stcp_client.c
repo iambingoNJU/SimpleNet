@@ -443,13 +443,12 @@ void make_seg(seg_t *pseg, tcb_list_item *ptcb, unsigned short type, char *data,
 	pseg->header.src_port = ptcb->tcb.client_portNum;
 	pseg->header.dest_port = ptcb->tcb.server_portNum;
 	pseg->header.seq_num = ptcb->tcb.next_seqNum;
-	pseg->header.length = sizeof(stcp_hdr_t);
+	pseg->header.length = 0;
 	pseg->header.type = type;
 	pseg->header.checksum = 0;
-	pseg->data_len = 0;
 
 	if(data && len) {
-		pseg->data_len = len;
+		pseg->header.length = len;
 		//pseg->header.length = len;
 		memcpy(pseg->data, data, len);
 		ptcb->tcb.next_seqNum += len;
