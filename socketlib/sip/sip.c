@@ -223,35 +223,41 @@ void waitSTCP() {
 
 	socklen_t clilen;
 	struct sockaddr cliaddr;
-	stcp_conn = accept(listenfd, &cliaddr, &clilen);
-	Log("[SIP] STCP connected SIP!");
-
-	int nextNode;
-	seg_t seg;
-	sip_pkt_t sip_pkt;
 
 	while(1) {
-		int ret = getsegToSend(stcp_conn, &nextNode, &seg);
-		if(ret != 1) {
-			Log("getsegToSend failed!");
-			close(stcp_conn);
-			return;
+		stcp_conn = accept(listenfd, &cliaddr, &clilen);
+
+		Assert(stcp_conn > 0, "accept error!!!");
+		Log("[SIP] STCP connected SIP!");
+
+		int nextNode;
+		seg_t seg;
+		sip_pkt_t sip_pkt;
+
+		while(1) {
+			int ret = getsegToSend(stcp_conn, &nextNode, &seg);
+			if(ret != 1) {
+				Log("getsegToSend failed!");
+				close(stcp_conn);
+				stcp_conn = -1;
+				break;
+			}
+
+			memset(&sip_pkt, 0, sizeof(sip_pkt));
+			sip_pkt.header.src_nodeID = topology_getMyNodeID();
+			sip_pkt.header.dest_nodeID = nextNode;
+			sip_pkt.header.type = SIP;
+			sip_pkt.header.length = sizeof(seg.header) + ntohs(seg.header.length);
+			memcpy(&(sip_pkt.data), &seg, sip_pkt.header.length);
+
+			sip_hdr_to_network_order(&sip_pkt.header);
+
+			pthread_mutex_lock(&son_conn_mutex);
+			if(son_sendpkt(nextNode, &sip_pkt, son_conn) != 1) {
+				Log("SIP recv STCP data, but send to son failed.");
+			}
+			pthread_mutex_unlock(&son_conn_mutex);
 		}
-
-		memset(&sip_pkt, 0, sizeof(sip_pkt));
-		sip_pkt.header.src_nodeID = topology_getMyNodeID();
-		sip_pkt.header.dest_nodeID = nextNode;
-		sip_pkt.header.type = SIP;
-		sip_pkt.header.length = sizeof(seg.header) + ntohs(seg.header.length);
-		memcpy(&(sip_pkt.data), &seg, sip_pkt.header.length);
-
-		sip_hdr_to_network_order(&sip_pkt.header);
-
-		pthread_mutex_lock(&son_conn_mutex);
-		if(son_sendpkt(nextNode, &sip_pkt, son_conn) != 1) {
-			Log("SIP recv STCP data, but send to son failed.");
-		}
-		pthread_mutex_unlock(&son_conn_mutex);
 	}
 }
 
@@ -297,11 +303,8 @@ int main(int argc, char *argv[]) {
 	routingtable_print(routingtable);
 
 	//等待来自STCP进程的连接
-	while(1) {
-		stcp_conn = -1;
-		printf("waiting for connection from STCP process\n");
-		waitSTCP(); 
-	}
+	printf("waiting for connection from STCP process\n");
+	waitSTCP(); 
 
 }
 
