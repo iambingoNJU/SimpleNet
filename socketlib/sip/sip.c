@@ -234,6 +234,7 @@ void waitSTCP() {
 		int ret = getsegToSend(stcp_conn, &nextNode, &seg);
 		if(ret != 1) {
 			Log("getsegToSend failed!");
+			close(stcp_conn);
 			return;
 		}
 
