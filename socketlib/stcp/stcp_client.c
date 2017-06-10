@@ -127,6 +127,7 @@ int stcp_client_connect(int sockfd, int nodeID, unsigned int server_port) {
 		usleep(SYN_TIMEOUT / 1000);
 
 		if(tcb_list[sockfd].tcb.state == CONNECTED) {
+			Log("stcp client connect succeeded!");
 			return 1;
 		}
 
@@ -134,6 +135,7 @@ int stcp_client_connect(int sockfd, int nodeID, unsigned int server_port) {
 	}
 
 	tcb_list[sockfd].tcb.state = CLOSED;
+	Log("stcp client connect failed!");
 
 	return -1;
 }
@@ -199,6 +201,8 @@ int stcp_client_disconnect(int sockfd) {
 	assert(tcb_list[sockfd].used == 1);
 	assert(tcb_list[sockfd].tcb.state == CONNECTED);
 
+	int ret = -1;
+
 	seg_t seg;
 	make_seg(&seg, &tcb_list[sockfd], FIN, NULL, 0);
 	stcp_hdr_to_network_order(&seg.header);
@@ -218,7 +222,9 @@ int stcp_client_disconnect(int sockfd) {
 		usleep(FIN_TIMEOUT / 1000);
 
 		if(tcb_list[sockfd].tcb.state == CLOSED) {
-			return 1;
+			Log("stcp client disconnect succeeded!");
+			ret = 1;
+			break;
 		}
 
 		Log("STCP client %d FIN %d timeout!", sockfd, FIN_MAX_RETRY - n);
@@ -235,7 +241,7 @@ int stcp_client_disconnect(int sockfd) {
 	}
 	pthread_mutex_unlock(tcb_list[sockfd].tcb.bufMutex);
 
-	return -1;
+	return ret;
 }
 
 // 关闭STCP客户

@@ -154,6 +154,7 @@ void* pkthandler(void* arg) {
 			for(int i = 0; i < update_msg->entryNum; i ++) {
 				dvtable_setcost(dv, srcNode, update_msg->entry[i].nodeID, update_msg->entry[i].cost); 
 			}
+			dvtable_print(dv);
 			// update all dvtable item
 			int nr_nbr = topology_getNbrNum();
 			int nr_node = topology_getNodeNum();
@@ -168,6 +169,7 @@ void* pkthandler(void* arg) {
 					}
 				}
 			}
+			routingtable_print(routingtable);
 
 		} else if(pkt.header.dest_nodeID == myNodeID) {
 			Assert(pkt.header.type == SIP, "Strange packet to me, but not SIP packet.");
@@ -235,12 +237,12 @@ void waitSTCP() {
 
 		Log("[SIP] STCP connected SIP!");
 
-		int nextNode;
+		int destNode;
 		seg_t seg;
 		sip_pkt_t sip_pkt;
 
 		while(1) {
-			int ret = getsegToSend(stcp_conn, &nextNode, &seg);
+			int ret = getsegToSend(stcp_conn, &destNode, &seg);
 			if(ret != 1) {
 				Log("getsegToSend failed!");
 				close(stcp_conn);
@@ -248,9 +250,17 @@ void waitSTCP() {
 				break;
 			}
 
+			int nextHop = routingtable_getnextnode(routingtable, destNode);
+			if(nextHop == -1) {
+				Log("Unreachable host %d!!!", destNode);
+				continue;
+			} else {
+				Log("destNode: %d, nextHop: %d", destNode, nextHop);
+			}
+
 			memset(&sip_pkt, 0, sizeof(sip_pkt));
 			sip_pkt.header.src_nodeID = topology_getMyNodeID();
-			sip_pkt.header.dest_nodeID = nextNode;
+			sip_pkt.header.dest_nodeID = destNode;
 			sip_pkt.header.type = SIP;
 			sip_pkt.header.length = sizeof(seg.header) + ntohs(seg.header.length);
 			memcpy(&(sip_pkt.data), &seg, sip_pkt.header.length);
@@ -258,7 +268,7 @@ void waitSTCP() {
 			sip_hdr_to_network_order(&sip_pkt.header);
 
 			pthread_mutex_lock(&son_conn_mutex);
-			if(son_sendpkt(nextNode, &sip_pkt, son_conn) != 1) {
+			if(son_sendpkt(nextHop, &sip_pkt, son_conn) != 1) {
 				Log("SIP recv STCP data, but send to son failed.");
 			}
 			pthread_mutex_unlock(&son_conn_mutex);
