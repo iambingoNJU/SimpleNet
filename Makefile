@@ -1,37 +1,54 @@
 CC = gcc
 CFLAGS = -std=gnu99 -Wall -Werror -pthread -g
 
-CLIENT_APP_SRC = client_app/app_simple_client.c
-#CLIENT_APP_SRC = client_app/app_stress_client.c
-CLIENT_APP_OBJ = $(CLIENT_APP_SRC:.c=.o)
-CLIENT_APP = client.elf
+SIMPLE_CLIENT_APP_SRC = client_app/app_simple_client.c
+SIMPLE_CLIENT_APP_OBJ = $(SIMPLE_CLIENT_APP_SRC:.c=.o)
+SIMPLE_CLIENT_APP = simple-client.elf
 
-SERVER_APP_SRC = server_app/app_simple_server.c
-#SERVER_APP_SRC = server_app/app_stress_server.c
-SERVER_APP_OBJ = $(SERVER_APP_SRC:.c=.o)
-SERVER_APP := server.elf
+STRESS_CLIENT_APP_SRC = client_app/app_stress_client.c
+STRESS_CLIENT_APP_OBJ = $(STRESS_CLIENT_APP_SRC:.c=.o)
+STRESS_CLIENT_APP = stress-client.elf
 
-all: socketlib $(CLIENT_APP) $(SERVER_APP)
+SIMPLE_SERVER_APP_SRC = server_app/app_simple_server.c
+SIMPLE_SERVER_APP_OBJ = $(SIMPLE_SERVER_APP_SRC:.c=.o)
+SIMPLE_SERVER_APP := simple-server.elf
+
+STRESS_SERVER_APP_SRC = server_app/app_stress_server.c
+STRESS_SERVER_APP_OBJ = $(STRESS_SERVER_APP_SRC:.c=.o)
+STRESS_SERVER_APP := stress-server.elf
+
+all: socketlib $(SIMPLE_CLIENT_APP) $(STRESS_CLIENT_APP) $(SIMPLE_SERVER_APP) $(STRESS_SERVER_APP)
 
 include socketlib/Makefile
 
-$(CLIENT_APP): $(CLIENT_APP_OBJ) $(STCP_ARCH)
+$(SIMPLE_CLIENT_APP): $(SIMPLE_CLIENT_APP_OBJ) $(STCP_ARCH)
 	$(CC) $(CFLAGS) -I$(STCP_ARCH) -L$(libpath) $^ -o $@
 
-$(SERVER_APP): $(SERVER_APP_OBJ) $(STCP_ARCH)
+$(STRESS_CLIENT_APP): $(STRESS_CLIENT_APP_OBJ) $(STCP_ARCH)
 	$(CC) $(CFLAGS) -I$(STCP_ARCH) -L$(libpath) $^ -o $@
 
-.PHONY: all clean
+$(SIMPLE_SERVER_APP): $(SIMPLE_SERVER_APP_OBJ) $(STCP_ARCH)
+	$(CC) $(CFLAGS) -I$(STCP_ARCH) -L$(libpath) $^ -o $@
 
-update: script/*
+$(STRESS_SERVER_APP): $(STRESS_SERVER_APP_OBJ) $(STCP_ARCH)
+	$(CC) $(CFLAGS) -I$(STCP_ARCH) -L$(libpath) $^ -o $@
+
+%.o:%.c
+	$(CC) $(CFLAGS) -c $^ -o $@ 
+
+.PHONY: all clean update
+
+update:
 	cd script && ./update-all.sh
 clean:
 	-rm -f $(COMMON_OBJ)
 	-rm -f $(SON_OBJ) $(SON)
 	-rm -f $(SIP_OBJ) $(SIP)
 	-rm -f $(STCP_OBJ) $(STCP_ARCH)
-	-rm -f $(SERVER_APP) $(SERVER_APP_OBJ)
-	-rm -f $(CLIENT_APP) $(CLIENT_APP_OBJ) 
+	-rm -f $(SIMPLE_SERVER_APP) $(SIMPLE_SERVER_APP_OBJ)
+	-rm -f $(STRESS_SERVER_APP) $(STRESS_SERVER_APP_OBJ)
+	-rm -f $(SIMPLE_CLIENT_APP) $(SIMPLE_CLIENT_APP_OBJ) 
+	-rm -f $(STRESS_CLIENT_APP) $(STRESS_CLIENT_APP_OBJ) 
 	
 	
 	
