@@ -92,13 +92,12 @@ int connectToSON() {
 //这个线程每隔ROUTEUPDATE_INTERVAL时间发送路由更新报文.路由更新报文包含这个节点
 //的距离矢量.广播是通过设置SIP报文头中的dest_nodeID为BROADCAST_NODEID,并通过son_sendpkt()发送报文来完成的.
 void* routeupdate_daemon(void* arg) {
-	sip_pkt_t pkt;
-	memset(&pkt, 0, sizeof(pkt));
-
 	pkt_routeupdate_t update_msg;
 	memset(&update_msg, 0, sizeof(update_msg));
 	update_msg.entryNum = topology_getNodeNum();
 
+	sip_pkt_t pkt;
+	memset(&pkt, 0, sizeof(pkt));
 	pkt.header.src_nodeID = topology_getMyNodeID();
 	pkt.header.dest_nodeID = BROADCAST_NODEID;
 	pkt.header.type = ROUTE_UPDATE;
@@ -115,7 +114,7 @@ void* routeupdate_daemon(void* arg) {
 		}
 		pthread_mutex_unlock(dv_mutex);
 
-		memcpy(pkt.data, (char*)&update_msg, pkt.header.length);
+		memcpy(pkt.data, (char*)&update_msg, ntohs(pkt.header.length));
 
 		pthread_mutex_lock(&son_conn_mutex);
 		if(son_sendpkt(BROADCAST_NODEID, &pkt, son_conn) != 1) {
