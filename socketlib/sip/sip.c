@@ -98,21 +98,25 @@ void* routeupdate_daemon(void* arg) {
 	pkt_routeupdate_t update_msg;
 	memset(&update_msg, 0, sizeof(update_msg));
 	update_msg.entryNum = topology_getNodeNum();
-	Assert(dv[0].nodeID == topology_getMyNodeID(), "dv item 0 should be myself DV!");
-	for(int i = 0; i < update_msg.entryNum; i ++) {
-		update_msg.entry[i].nodeID = dv[0].dvEntry[i].nodeID;
-		update_msg.entry[i].cost = dv[0].dvEntry[i].cost;
-	}
 
 	pkt.header.src_nodeID = topology_getMyNodeID();
 	pkt.header.dest_nodeID = BROADCAST_NODEID;
 	pkt.header.type = ROUTE_UPDATE;
 	pkt.header.length = sizeof(update_msg.entryNum) + update_msg.entryNum * sizeof(update_msg.entry[0]);
-	memcpy(pkt.data, (char*)&update_msg, pkt.header.length);
 
 	sip_hdr_to_network_order(&pkt.header);
 
 	while(1) {
+		pthread_mutex_lock(dv_mutex);
+		Assert(dv[0].nodeID == topology_getMyNodeID(), "dv item 0 should be myself DV!");
+		for(int i = 0; i < update_msg.entryNum; i ++) {
+			update_msg.entry[i].nodeID = dv[0].dvEntry[i].nodeID;
+			update_msg.entry[i].cost = dv[0].dvEntry[i].cost;
+		}
+		pthread_mutex_unlock(dv_mutex);
+
+		memcpy(pkt.data, (char*)&update_msg, pkt.header.length);
+
 		pthread_mutex_lock(&son_conn_mutex);
 		if(son_sendpkt(BROADCAST_NODEID, &pkt, son_conn) != 1) {
 			Log("Sending packet failed.");
@@ -152,7 +156,9 @@ void* pkthandler(void* arg) {
 			int srcNode = pkt.header.src_nodeID;
 			// update dvtable item src_nodeID
 			for(int i = 0; i < update_msg->entryNum; i ++) {
+				pthread_mutex_lock(dv_mutex);
 				dvtable_setcost(dv, srcNode, update_msg->entry[i].nodeID, update_msg->entry[i].cost); 
+				pthread_mutex_unlock(dv_mutex);
 			}
 			// update all dvtable item
 			int nr_nbr = topology_getNbrNum();
@@ -160,7 +166,10 @@ void* pkthandler(void* arg) {
 			for(int i = 0; i <= nr_nbr; i ++) {
 				for(int j = 0; j < nr_node; j ++) {
 					if(dv[i].dvEntry[j].cost > dvtable_getcost(dv, dv[i].nodeID, srcNode) + dvtable_getcost(dv, srcNode, dv[i].dvEntry[j].nodeID)) {
+						pthread_mutex_lock(dv_mutex);
 						dv[i].dvEntry[j].cost = dvtable_getcost(dv, dv[i].nodeID, srcNode) + dvtable_getcost(dv, srcNode, dv[i].dvEntry[j].nodeID);
+						pthread_mutex_unlock(dv_mutex);
+
 						if(i == 0) {
 							pthread_mutex_lock(routingtable_mutex);
 							routingtable_setnextnode(routingtable, dv[i].dvEntry[j].nodeID, srcNode);
