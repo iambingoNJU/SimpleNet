@@ -154,21 +154,23 @@ void* pkthandler(void* arg) {
 			for(int i = 0; i < update_msg->entryNum; i ++) {
 				dvtable_setcost(dv, srcNode, update_msg->entry[i].nodeID, update_msg->entry[i].cost); 
 			}
-			dvtable_print(dv);
 			// update all dvtable item
 			int nr_nbr = topology_getNbrNum();
 			int nr_node = topology_getNodeNum();
-			int idx = dvtable_getidx(dv, srcNode);
 			for(int i = 0; i <= nr_nbr; i ++) {
 				for(int j = 0; j < nr_node; j ++) {
-					if(dv[i].dvEntry[j].cost > dv[i].dvEntry[idx].cost + dv[idx].dvEntry[j].cost) {
-						dv[i].dvEntry[j].cost = dv[i].dvEntry[idx].cost + dv[idx].dvEntry[j].cost;
+					if(dv[i].dvEntry[j].cost > dvtable_getcost(dv, dv[i].nodeID, srcNode) + dvtable_getcost(dv, srcNode, dv[i].dvEntry[j].nodeID)) {
+						dv[i].dvEntry[j].cost = dvtable_getcost(dv, dv[i].nodeID, srcNode) + dvtable_getcost(dv, srcNode, dv[i].dvEntry[j].nodeID);
 						if(i == 0) {
+							pthread_mutex_lock(routingtable_mutex);
 							routingtable_setnextnode(routingtable, dv[i].dvEntry[j].nodeID, srcNode);
+							pthread_mutex_unlock(routingtable_mutex);
 						}
 					}
 				}
 			}
+
+			dvtable_print(dv);
 			routingtable_print(routingtable);
 
 		} else if(pkt.header.dest_nodeID == myNodeID) {
@@ -180,7 +182,9 @@ void* pkthandler(void* arg) {
 				Log("SIP receiving packet, but STCP connection hasn't beend constructed.");
 			}
 		} else {
+			pthread_mutex_lock(routingtable_mutex);
 			int nextNode = routingtable_getnextnode(routingtable, pkt.header.dest_nodeID);
+			pthread_mutex_unlock(routingtable_mutex);
 			if(nextNode != -1) {
 				sip_hdr_to_network_order(&(pkt.header));
 				pthread_mutex_lock(&son_conn_mutex);
@@ -250,7 +254,9 @@ void waitSTCP() {
 				break;
 			}
 
+			pthread_mutex_lock(routingtable_mutex);
 			int nextHop = routingtable_getnextnode(routingtable, destNode);
+			pthread_mutex_unlock(routingtable_mutex);
 			if(nextHop == -1) {
 				Log("Unreachable host %d!!!", destNode);
 				continue;
