@@ -150,18 +150,59 @@ void* pkthandler(void* arg) {
 
 		if(pkt.header.dest_nodeID == BROADCAST_NODEID) {
 			Assert(pkt.header.type == ROUTE_UPDATE, "Strange broadcast pakcet, but not ROUTE_UPDATE packet.");
-			Log("SIP receiving route update packet.");
-			pkt_routeupdate_t *update_msg = (pkt_routeupdate_t*)pkt.data;
 			int srcNode = pkt.header.src_nodeID;
+			Log("SIP receiving route update packet from node %d.", srcNode);
+			pkt_routeupdate_t *update_msg = (pkt_routeupdate_t*)pkt.data;
+
 			// update dvtable item src_nodeID
+			pthread_mutex_lock(dv_mutex);
 			for(int i = 0; i < update_msg->entryNum; i ++) {
-				pthread_mutex_lock(dv_mutex);
-				dvtable_setcost(dv, srcNode, update_msg->entry[i].nodeID, update_msg->entry[i].cost); 
-				pthread_mutex_unlock(dv_mutex);
+				Assert(dvtable_setcost(dv, srcNode, update_msg->entry[i].nodeID, update_msg->entry[i].cost) == 1, "Updating dvtable failed!");
 			}
+			pthread_mutex_unlock(dv_mutex);
+
 			// update all dvtable item
-			int nr_nbr = topology_getNbrNum();
+			//int nr_nbr = topology_getNbrNum();
 			int nr_node = topology_getNodeNum();
+			int *node_arr = topology_getNodeArray();
+
+			int min_cost, nextHop;
+			for(int i = 0; i < nr_node; i ++) { // for all dest node
+				if(dv[0].dvEntry[i].nodeID == myNodeID) {
+					continue;
+				}
+
+				nextHop = -1;
+				min_cost = INFINITE_COST;
+
+				for(int j = 0; j < nr_node; j ++) {
+					int nbr_cost = nbrcosttable_getcost(nct, node_arr[j]);
+					if((node_arr[j] != myNodeID) && (nbr_cost != INFINITE_COST)) { // my neighbour
+						int dv_cost = dvtable_getcost(dv, node_arr[j], dv[0].dvEntry[i].nodeID);
+						if(min_cost > nbr_cost + dv_cost) {
+							min_cost = nbr_cost + dv_cost;
+							nextHop = node_arr[j];
+						}
+						
+					}
+				}
+
+				// update dvtable
+				pthread_mutex_lock(dv_mutex);
+				dv[0].dvEntry[i].cost = min_cost;
+				pthread_mutex_unlock(dv_mutex);
+
+				// update routingtable
+				pthread_mutex_lock(routingtable_mutex);
+				if(nextHop != -1) {
+					routingtable_setnextnode(routingtable, dv[0].dvEntry[i].nodeID, nextHop);
+				} else {
+					routingtable_deleteitem(routingtable, dv[0].dvEntry[i].nodeID);
+				}
+				pthread_mutex_unlock(routingtable_mutex);
+			}
+
+/*
 			for(int i = 0; i <= nr_nbr; i ++) {
 				for(int j = 0; j < nr_node; j ++) {
 					if(dv[i].dvEntry[j].cost > dvtable_getcost(dv, dv[i].nodeID, srcNode) + dvtable_getcost(dv, srcNode, dv[i].dvEntry[j].nodeID)) {
@@ -177,9 +218,12 @@ void* pkthandler(void* arg) {
 					}
 				}
 			}
+*/
 
 			dvtable_print(dv);
 			routingtable_print(routingtable);
+
+			free(node_arr);
 
 		} else if(pkt.header.dest_nodeID == myNodeID) {
 			Assert(pkt.header.type == SIP, "Strange packet to me, but not SIP packet.");

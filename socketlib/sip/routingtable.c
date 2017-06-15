@@ -82,6 +82,33 @@ void routingtable_setnextnode(routingtable_t* routingtable, int destNodeID, int 
 	Log("Insert routing table item. destNodeID: %d, nextNodeID: %d", new_rt_entry->destNodeID, new_rt_entry->nextNodeID);
 }
 
+
+int routingtable_deleteitem(routingtable_t* routingtable, int destNodeID) {
+	int idx = makehash(destNodeID);
+	routingtable_entry_t *rt_hdr = routingtable->hash[idx], *pre = NULL;
+	while(rt_hdr != NULL) {
+		if(rt_hdr->destNodeID == destNodeID) {
+			break;
+		}
+		pre = rt_hdr;
+		rt_hdr = rt_hdr->next;
+	}
+
+	if(rt_hdr == NULL) {
+		return -1;
+	} else {
+		assert(rt_hdr->destNodeID == destNodeID);
+		if(pre == NULL) {
+			routingtable->hash[idx] = rt_hdr->next;
+		} else {
+			pre->next = rt_hdr->next;
+		}
+		free(rt_hdr);
+		Log("Removing routing table item. destNodeID: %d", destNodeID);
+		return 1;
+	}
+}
+
 //这个函数在路由表中查找指定的目标节点ID.
 //为找到一个目的节点的路由条目, 你应该首先使用哈希函数makehash()获得槽号,
 //然后遍历该槽中的链表以搜索路由条目.如果发现destNodeID, 就返回针对这个目的节点的下一跳节点ID, 否则返回-1.

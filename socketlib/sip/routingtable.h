@@ -43,6 +43,8 @@ void routingtable_destroy(routingtable_t* routingtable);
 //然后将路由条目附加到该槽的链表中.
 void routingtable_setnextnode(routingtable_t* routingtable, int destNodeID, int nextNodeID);
 
+int routingtable_deleteitem(routingtable_t* routingtable, int destNodeID);
+
 //这个函数在路由表中查找指定的目标节点ID.
 //为找到一个目的节点的路由条目, 你应该首先使用哈希函数makehash()获得槽号,
 //然后遍历该槽中的链表以搜索路由条目.如果发现destNodeID, 就返回针对这个目的节点的下一跳节点ID, 否则返回-1.
