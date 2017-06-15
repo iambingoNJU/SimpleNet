@@ -28,7 +28,7 @@
 #include "neighbortable.h"
 
 //你应该在这个时间段内启动所有重叠网络节点上的SON进程
-#define SON_START_DELAY 60
+#define SON_START_DELAY 30
 
 /**************************************************************/
 //声明全局变量
