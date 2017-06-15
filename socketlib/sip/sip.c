@@ -205,24 +205,6 @@ void* pkthandler(void* arg) {
 				pthread_mutex_unlock(routingtable_mutex);
 			}
 
-/*
-			for(int i = 0; i <= nr_nbr; i ++) {
-				for(int j = 0; j < nr_node; j ++) {
-					if(dv[i].dvEntry[j].cost > dvtable_getcost(dv, dv[i].nodeID, srcNode) + dvtable_getcost(dv, srcNode, dv[i].dvEntry[j].nodeID)) {
-						pthread_mutex_lock(dv_mutex);
-						dv[i].dvEntry[j].cost = dvtable_getcost(dv, dv[i].nodeID, srcNode) + dvtable_getcost(dv, srcNode, dv[i].dvEntry[j].nodeID);
-						pthread_mutex_unlock(dv_mutex);
-
-						if(i == 0) {
-							pthread_mutex_lock(routingtable_mutex);
-							routingtable_setnextnode(routingtable, dv[i].dvEntry[j].nodeID, srcNode);
-							pthread_mutex_unlock(routingtable_mutex);
-						}
-					}
-				}
-			}
-*/
-
 			dvtable_print(dv);
 			routingtable_print(routingtable);
 
@@ -246,7 +228,7 @@ void* pkthandler(void* arg) {
 				if(son_sendpkt(nextNode, &pkt, son_conn) != 1) {
 					Log("SIP forwarding pakcet failed!");
 				} else {
-					Log("SIP forwarding packet to %d", ntohl(pkt.header.dest_nodeID));
+					Log("SIP forwarding packet[dest: %d] to %d", ntohl(pkt.header.dest_nodeID), nextNode);
 				}
 				pthread_mutex_unlock(&son_conn_mutex);
 			} else {

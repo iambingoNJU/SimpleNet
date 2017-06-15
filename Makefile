@@ -40,6 +40,7 @@ $(STRESS_SERVER_APP): $(STRESS_SERVER_APP_OBJ) $(STCP_ARCH)
 
 update:
 	cd script && ./update-all.sh
+
 clean:
 	-rm -f $(COMMON_OBJ)
 	-rm -f $(SON_OBJ) $(SON)
