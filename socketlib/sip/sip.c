@@ -158,6 +158,9 @@ void* pkthandler(void* arg) {
 			pthread_mutex_lock(dv_mutex);
 			for(int i = 0; i < update_msg->entryNum; i ++) {
 				Assert(dvtable_setcost(dv, srcNode, update_msg->entry[i].nodeID, update_msg->entry[i].cost) == 1, "Updating dvtable failed!");
+				if(update_msg->entry[i].nodeID == myNodeID) {
+					Assert(dvtable_setcost(dv, myNodeID, srcNode, update_msg->entry[i].cost) == 1, "Updating dvtable failed!");
+				}
 			}
 			pthread_mutex_unlock(dv_mutex);
 
