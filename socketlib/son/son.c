@@ -109,6 +109,41 @@ int connectNbrs() {
   	return 1;
 }
 
+
+void sip_hdr_to_network_order(sip_hdr_t *piphdr) {
+	piphdr->src_nodeID = htonl(piphdr->src_nodeID);
+	piphdr->dest_nodeID = htonl(piphdr->dest_nodeID);
+	piphdr->type = htons(piphdr->type);
+	piphdr->length = htons(piphdr->length);
+}
+
+void send_update_msg_to_SIP(int srcNode) {
+	pkt_routeupdate_t update_msg;
+	memset(&update_msg, 0, sizeof(update_msg));
+	update_msg.entryNum = topology_getNodeNum();
+
+	sip_pkt_t pkt;
+	memset(&pkt, 0, sizeof(pkt));
+	pkt.header.src_nodeID = srcNode;
+	pkt.header.dest_nodeID = BROADCAST_NODEID;
+	pkt.header.type = ROUTE_UPDATE;
+	pkt.header.length = sizeof(update_msg.entryNum) + update_msg.entryNum * sizeof(update_msg.entry[0]);
+
+	sip_hdr_to_network_order(&pkt.header);
+
+	int *node_arr = topology_getNodeArray();
+	for(int i = 0; i < update_msg.entryNum; i ++) {
+		update_msg.entry[i].nodeID = node_arr[i];
+		update_msg.entry[i].cost = INFINITE_COST;
+	}
+
+	memcpy(pkt.data, (char*)&update_msg, ntohs(pkt.header.length));
+
+	forwardpktToSIP(&pkt, sip_conn);
+
+	free(node_arr);
+}
+
 //每个listen_to_neighbor线程持续接收来自一个邻居的报文. 它将接收到的报文转发给SIP进程.
 //所有的listen_to_neighbor线程都是在到邻居的TCP连接全部建立之后启动的. 
 void* listen_to_neighbor(void* arg) {
@@ -123,6 +158,7 @@ void* listen_to_neighbor(void* arg) {
 			printf("[listen_to_neighbor %d] recv info error. thread %d exit.\n", (nt[idx].nodeIP >> 24) & 0xff, idx);
 			close(nt[idx].conn);
 			nt[idx].state = SON_CLOSED;
+			send_update_msg_to_SIP((nt[idx].nodeIP >> 24) & 0xff);
 			pthread_exit(NULL);
 		}
 
